@@ -657,7 +657,8 @@ function overviewView(s: SeasonState): HTMLElement {
   }
 
   if (!isSeasonOver(s) && !s.offers?.length && !s.intake) left.append(goalCard(s, table, pos));
-  if (isSeasonOver(s) && !s.offers?.length && !s.intake) left.append(reviewCard(s));
+  const review = isSeasonOver(s) && !s.offers?.length && !s.intake ? reviewSeason(s) : null;
+  if (review) left.append(reviewCard(s, review));
 
   const newsItem = (n: SeasonState["news"][number]) => {
     const stamp = h("span", { class: "dim" }, n.matchday ? `S${n.season} MD${n.matchday}  ` : `S${n.season}  `);
@@ -669,14 +670,26 @@ function overviewView(s: SeasonState): HTMLElement {
   };
   const right = h("div", { class: "col" },
     card("League table", buildTable(s, { compact: true, onClub: (id) => (id === s.managedId ? undefined : scout(s, id)) })),
-    card("Club news", h("ul", { class: "news" }, ...s.news.slice(0, 8).map(newsItem))));
+    card("Club news", h("ul", { class: "news" }, ...s.news.slice(0, 8).map(newsItem))),
+    ...(review?.players.length ? [leadersCard(s, review)] : []));
   return h("div", { class: "grid" }, left, right);
 }
 
+/** The squad's standouts for the season, shown beside the league table on the right. */
+function leadersCard(s: SeasonState, r: NonNullable<ReturnType<typeof reviewSeason>>): HTMLElement {
+  const [first, ...rest] = r.players;
+  const kids: (Node | string)[] = [];
+  if (first) kids.push(h("div", { class: "potm-row" }, avatarBadge(first.player, s.gender, "md"), h("div", { class: "potm-line" }, h("b", {}, first.player.name), h("div", { class: "dim" }, first.label))));
+  for (const pl of rest) {
+    const [what, detail] = pl.label.split(": ");
+    kids.push(h("div", { class: "rv-row" }, h("span", { class: "dim" }, what), h("span", {}, h("b", {}, pl.player.name), ` ${detail}`)));
+  }
+  if (r.topScorerIsYours) kids.push(h("div", { class: "goal-status ok" }, "★ Your player finished as the league's top scorer."));
+  return card(`${teamById(s, s.managedId).short} season leaders`, ...kids);
+}
+
 /** How the season went: finish, the board's goal and bonus, the money, the standout players and any club records. */
-function reviewCard(s: SeasonState): HTMLElement {
-  const r = reviewSeason(s)!;
-  const me = teamById(s, s.managedId);
+function reviewCard(s: SeasonState, r: NonNullable<ReturnType<typeof reviewSeason>>): HTMLElement {
   const moved = r.previousFinish === undefined ? "" : r.previousFinish === r.finish ? ", same as last season" : r.finish < r.previousFinish ? `, up from ${ordinal(r.previousFinish)}` : `, down from ${ordinal(r.previousFinish)}`;
   const headline = r.championIsYou ? "Champions! The league is yours." : r.finish <= 3 ? `A podium finish: ${ordinal(r.finish)} of ${r.clubs}${moved}.` : `${ordinal(r.finish)} of ${r.clubs}${moved}.`;
   const rec = r.record;
@@ -699,11 +712,6 @@ function reviewCard(s: SeasonState): HTMLElement {
     children.push(h("h2", { class: "sub" }, "Results"));
     if (r.bestWin) children.push(row("Best win", gm(r.bestWin), "good"));
     if (r.worstLoss) children.push(row("Heaviest defeat", gm(r.worstLoss), "bad"));
-  }
-  if (r.players.length) {
-    children.push(h("h2", { class: "sub" }, `${me.short} players`));
-    r.players.forEach((pl, i) => children.push(h("div", { class: "potm-row" }, ...(i === 0 ? [avatarBadge(pl.player, s.gender, "md")] : []), h("div", { class: i === 0 ? "potm-line" : "rv-leader" }, h("b", {}, pl.player.name), h("div", { class: "dim" }, pl.label)))));
-    if (r.topScorerIsYours) children.push(h("div", { class: "goal-status ok" }, "★ Your player finished as the league's top scorer."));
   }
   if (r.developed.length) {
     children.push(h("h2", { class: "sub" }, "Best developed (growth lands when the new season starts)"));
