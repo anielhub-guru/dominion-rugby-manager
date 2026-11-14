@@ -6,6 +6,10 @@ drift apart). It is shown in the app footer and on the new-game screen.
 
 ## Unreleased
 
+- Season review. When a season ends, the empty space on the Overview now shows how it went: your finish against
+  last season, record and points, whether you met or smashed the board's goal and the bonus it pays, the prize
+  money, wage bill and balance that starting the next season will apply, best win and heaviest defeat, player of
+  the season and the squad's stat leaders, and any club records broken.
 - Match experience. Playing matches now develops players, not just training. At the offseason a player's growth
   toward potential is scaled by the share of the season's matches they played: for under-22s from 0.4x on the
   bench to 1.2x as an ever-present, for 22 to 27 from 0.7x to 1.2x. Veterans from 31 who played at least half

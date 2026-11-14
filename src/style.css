@@ -450,3 +450,9 @@ h2.sub { margin-top: 14px; }
 .cutaway-art { display: block; width: 100%; height: 100%; object-fit: contain; }
 .cutaway-controls { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; }
 .cutaway-controls .shake { display: inline-flex; align-items: center; gap: 4px; color: var(--dim); }
+
+/* End-of-season review */
+.rv-head { display: flex; gap: 10px; align-items: center; }
+.rv-row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; border-bottom: 1px solid var(--line); }
+.rv-row.good > span:last-child { color: var(--acc); } .rv-row.bad > span:last-child { color: #ff6b5e; }
+.rv-leader { margin: 4px 0 0 74px; }

@@ -40,6 +40,7 @@ import { ATTR_NAMES, TACTIC_FOCUS, bestFive, buildRadar, playerProfile, profileO
 import { buildRules } from "./viewer/rules";
 import { buildTable } from "./viewer/table";
 import { championsCard, clubCard } from "./viewer/history";
+import { reviewSeason } from "./league/review";
 
 type Tab = "overview" | "squad" | "training" | "table" | "fixtures" | "history";
 const TABS: [Tab, string][] = [
@@ -656,6 +657,7 @@ function overviewView(s: SeasonState): HTMLElement {
   }
 
   if (!isSeasonOver(s) && !s.offers?.length && !s.intake) left.append(goalCard(s, table, pos));
+  if (isSeasonOver(s) && !s.offers?.length && !s.intake) left.append(reviewCard(s));
 
   const newsItem = (n: SeasonState["news"][number]) => {
     const stamp = h("span", { class: "dim" }, n.matchday ? `S${n.season} MD${n.matchday}  ` : `S${n.season}  `);
@@ -669,6 +671,44 @@ function overviewView(s: SeasonState): HTMLElement {
     card("League table", buildTable(s, { compact: true, onClub: (id) => (id === s.managedId ? undefined : scout(s, id)) })),
     card("Club news", h("ul", { class: "news" }, ...s.news.slice(0, 8).map(newsItem))));
   return h("div", { class: "grid" }, left, right);
+}
+
+/** How the season went: finish, the board's goal and bonus, the money, the standout players and any club records. */
+function reviewCard(s: SeasonState): HTMLElement {
+  const r = reviewSeason(s)!;
+  const me = teamById(s, s.managedId);
+  const moved = r.previousFinish === undefined ? "" : r.previousFinish === r.finish ? ", same as last season" : r.finish < r.previousFinish ? `, up from ${ordinal(r.previousFinish)}` : `, down from ${ordinal(r.previousFinish)}`;
+  const headline = r.championIsYou ? "Champions! The league is yours." : r.finish <= 3 ? `A podium finish: ${ordinal(r.finish)} of ${r.clubs}${moved}.` : `${ordinal(r.finish)} of ${r.clubs}${moved}.`;
+  const rec = r.record;
+  const row = (label: string, value: string, cls = "") => h("div", { class: `rv-row ${cls}` }, h("span", { class: "dim" }, label), h("span", {}, value));
+  const gm = (m: NonNullable<typeof r.bestWin>) => `${m.scored}-${m.conceded} ${m.home ? "v" : "at"} ${m.opponent} (MD${m.matchday})`;
+  const goalLine = !r.goal.text ? "No set goal" : r.goal.result === "smashed" ? `Smashed: ${r.goal.text}` : r.goal.result === "met" ? `Achieved: ${r.goal.text}` : `Missed: ${r.goal.text}`;
+  const children: (Node | string)[] = [
+    h("div", { class: "rv-head" }, h("span", { class: "pos-badge" }, String(r.finish)), h("div", {}, h("b", {}, headline), h("div", { class: "dim" }, `${rec.won}W ${rec.drawn}D ${rec.lost}L, ${rec.points} points. Scored ${rec.pointsFor}, conceded ${rec.pointsAgainst} (${rec.pointsFor - rec.pointsAgainst >= 0 ? "+" : ""}${rec.pointsFor - rec.pointsAgainst}). ${rec.triesFor} tries, ${rec.bonus} bonus points.`))),
+    h("h2", { class: "sub" }, "Board goal"),
+    h("div", { class: `goal-status ${r.goal.result === "missed" ? "bad" : "ok"}` }, goalLine),
+    h("div", { class: "dim" }, r.goal.result === "missed" ? "No bonus this season." : `${r.goal.result === "smashed" ? "Beyond expectations" : "Goal met"}: ${fmtMoney(r.goal.bonus)} bonus from the board.`),
+    h("h2", { class: "sub" }, "Finances (paid when the new season starts)"),
+    row(`Prize money (${ordinal(r.finish)})`, fmtMoney(r.money.prize)),
+    row("Wage bill", fmtMoney(-r.money.wages)),
+    row("Board bonus", r.money.bonus ? fmtMoney(r.money.bonus) : "-"),
+    row("Net for the season", fmtMoney(r.money.net), r.money.net < 0 ? "bad" : "good"),
+    row("Balance after", fmtMoney(r.money.balanceAfter)),
+  ];
+  if (r.bestWin || r.worstLoss) {
+    children.push(h("h2", { class: "sub" }, "Results"));
+    if (r.bestWin) children.push(row("Best win", gm(r.bestWin), "good"));
+    if (r.worstLoss) children.push(row("Heaviest defeat", gm(r.worstLoss), "bad"));
+  }
+  if (r.players.length) {
+    children.push(h("h2", { class: "sub" }, `${me.short} players`));
+    r.players.forEach((pl, i) => children.push(h("div", { class: "potm-row" }, ...(i === 0 ? [avatarBadge(pl.player, s.gender, "md")] : []), h("div", { class: i === 0 ? "potm-line" : "rv-leader" }, h("b", {}, pl.player.name), h("div", { class: "dim" }, pl.label)))));
+    if (r.topScorerIsYours) children.push(h("div", { class: "goal-status ok" }, "★ Your player finished as the league's top scorer."));
+  }
+  if (r.records.length) {
+    children.push(h("h2", { class: "sub" }, "New club records"), ...r.records.map((x) => h("div", { class: "dim" }, `★ ${x}`)));
+  }
+  return card(`Season ${s.season} review`, ...children);
 }
 
 /** Club goal progress and the state of the rivalry, for the overview. */
