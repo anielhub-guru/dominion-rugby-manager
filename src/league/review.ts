@@ -29,6 +29,19 @@ export interface ReviewDeveloped {
   apps: number;
 }
 
+/** League-wide facts for the season, with where your club ranks. */
+export interface ReviewLeague {
+  champion: { name: string; points: number; margin: number };
+  topScorer?: { name: string; club: string; points: number };
+  bestAttack: { club: string; points: number };
+  bestDefence: { club: string; points: number };
+  mostTries: { club: string; tries: number };
+  yourAttackRank: number;
+  yourDefenceRank: number;
+  yourPointsFor: number;
+  yourPointsAgainst: number;
+}
+
 /** A look back at the season just finished, for the end-of-season overview. Nothing here changes the save. */
 export interface SeasonReview {
   finish: number;
@@ -49,6 +62,7 @@ export interface SeasonReview {
   /** League top scorer, when from your club. */
   topScorerIsYours: boolean;
   records: string[];
+  league: ReviewLeague;
 }
 
 /** Player of the season (best average impact per appearance), then the stat leaders. A category nobody scored in is skipped. */
@@ -121,10 +135,27 @@ export function reviewSeason(s: SeasonState): SeasonReview | null {
 
   let leagueTop = 0;
   let topIsYours = false;
+  let topScorer: ReviewLeague["topScorer"];
   for (const club of s.teams) for (const p of club.players) {
     const pts = s.seasonStats[p.id]?.points ?? 0;
-    if (pts > leagueTop) (leagueTop = pts), (topIsYours = club.id === s.managedId);
+    if (pts > leagueTop) (leagueTop = pts), (topIsYours = club.id === s.managedId), (topScorer = { name: p.name, club: club.name, points: pts });
   }
+  const club = (id: string) => teamById(s, id).name;
+  const by = (f: (r: (typeof table)[number]) => number) => [...table].sort((a, b) => f(b) - f(a));
+  const attack = by((r) => r.pointsFor);
+  const defence = by((r) => -r.pointsAgainst);
+  const tries = by((r) => r.triesFor);
+  const league: ReviewLeague = {
+    champion: { name: club(table[0].teamId), points: table[0].points, margin: table[1] ? table[0].points - table[1].points : 0 },
+    ...(topScorer ? { topScorer } : {}),
+    bestAttack: { club: club(attack[0].teamId), points: attack[0].pointsFor },
+    bestDefence: { club: club(defence[0].teamId), points: defence[0].pointsAgainst },
+    mostTries: { club: club(tries[0].teamId), tries: tries[0].triesFor },
+    yourAttackRank: attack.findIndex((r) => r.teamId === s.managedId) + 1,
+    yourDefenceRank: defence.findIndex((r) => r.teamId === s.managedId) + 1,
+    yourPointsFor: row.pointsFor,
+    yourPointsAgainst: row.pointsAgainst,
+  };
 
   const recordText = (Object.entries(s.records[s.managedId] ?? {}) as [RecordKey, ClubRecord][])
     .filter(([, r]) => r.season === s.season)
@@ -145,5 +176,6 @@ export function reviewSeason(s: SeasonState): SeasonReview | null {
     developed: developed(s),
     topScorerIsYours: topIsYours && leagueTop > 0,
     records: recordText,
+    league,
   };
 }

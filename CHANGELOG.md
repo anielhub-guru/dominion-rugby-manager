@@ -6,6 +6,9 @@ drift apart). It is shown in the app footer and on the new-game screen.
 
 ## Unreleased
 
+- Fixed the play-time clock: the running total went back to zero on every launch, because the startup key
+  migration in storage swept up its old `arena:` key. It now uses a `dominion:` key. The season review also gains
+  an "around the league" card (champions, top scorer, best attack and defence, and where your club ranks).
 - Season review. When a season ends, the empty space on the Overview now shows how it went: your finish against
   last season, record and points, whether you met or smashed the board's goal and the bonus it pays, the prize
   money, wage bill and balance that starting the next season will apply, best win and heaviest defeat, player of

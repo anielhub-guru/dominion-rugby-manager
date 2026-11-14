@@ -671,8 +671,22 @@ function overviewView(s: SeasonState): HTMLElement {
   const right = h("div", { class: "col" },
     card("League table", buildTable(s, { compact: true, onClub: (id) => (id === s.managedId ? undefined : scout(s, id)) })),
     card("Club news", h("ul", { class: "news" }, ...s.news.slice(0, 8).map(newsItem))),
-    ...(review?.players.length ? [leadersCard(s, review)] : []));
+    ...(review ? [...(review.players.length ? [leadersCard(s, review)] : []), leagueCard(s, review)] : []));
   return h("div", { class: "grid" }, left, right);
+}
+
+/** League-wide facts for the season, with where your club ranks. Sits under the leaders on the right. */
+function leagueCard(s: SeasonState, r: NonNullable<ReturnType<typeof reviewSeason>>): HTMLElement {
+  const l = r.league;
+  const row = (label: string, value: string, cls = "") => h("div", { class: `rv-row ${cls}` }, h("span", { class: "dim" }, label), h("span", {}, value));
+  return card(`Season ${s.season} around the league`,
+    row("Champions", `${l.champion.name}, ${l.champion.points} pts${l.champion.margin ? ` (${l.champion.margin} clear)` : ""}`),
+    ...(l.topScorer ? [row("Top scorer", `${l.topScorer.name} (${l.topScorer.club}) ${l.topScorer.points}`)] : []),
+    row("Best attack", `${l.bestAttack.club}, ${l.bestAttack.points} points`),
+    row("Best defence", `${l.bestDefence.club}, ${l.bestDefence.points} conceded`),
+    row("Most tries", `${l.mostTries.club}, ${l.mostTries.tries}`),
+    row("Your attack", `${l.yourPointsFor} points, ${ordinal(l.yourAttackRank)} best`, l.yourAttackRank <= 3 ? "good" : l.yourAttackRank > r.clubs - 3 ? "bad" : ""),
+    row("Your defence", `${l.yourPointsAgainst} conceded, ${ordinal(l.yourDefenceRank)} best`, l.yourDefenceRank <= 3 ? "good" : l.yourDefenceRank > r.clubs - 3 ? "bad" : ""));
 }
 
 /** The squad's standouts for the season, shown beside the league table on the right. */
@@ -1153,7 +1167,8 @@ async function boot() {
 
 /** Real time spent in the game: this session and the running total across sessions, bottom-right. */
 function startPlayClock() {
-  const KEY = "arena:play-ms";
+  // "dominion:" prefix: storage.ts moves any "arena:" key at startup, which reset the total every launch.
+  const KEY = "dominion:play-ms";
   let saved = 0;
   try {
     saved = Number(localStorage.getItem(KEY)) || 0;
