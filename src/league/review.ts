@@ -3,7 +3,8 @@ import { impact } from "./awards";
 import { RECORD_META, type ClubRecord, type RecordKey } from "./history";
 import { goalBonus, goalResult, prizeFor, wageOf, type GoalResult } from "./economy";
 import { computeStandings } from "./standings";
-import { objectiveTarget } from "./teams";
+import { evolvePlayers, objectiveTarget, overall, playShare } from "./teams";
+import { hashSeed } from "../engine/rng";
 import { lastFinishHere, teamById, type SeasonState } from "./season";
 
 export interface ReviewMatch {
@@ -17,6 +18,15 @@ export interface ReviewMatch {
 export interface ReviewPlayer {
   player: Player;
   label: string;
+}
+
+export interface ReviewDeveloped {
+  player: Player;
+  /** Rating points (across all attributes) gained in training this season. */
+  trained: number;
+  /** Overall rating the offseason will add for a young player, from the share of matches they played. */
+  growth: number;
+  apps: number;
 }
 
 /** A look back at the season just finished, for the end-of-season overview. Nothing here changes the save. */
@@ -34,6 +44,8 @@ export interface SeasonReview {
   worstLoss?: ReviewMatch;
   /** Player of the season first, then the stat leaders. */
   players: ReviewPlayer[];
+  /** Your best improved players, from training and from the match experience the offseason will reward. */
+  developed: ReviewDeveloped[];
   /** League top scorer, when from your club. */
   topScorerIsYours: boolean;
   records: string[];
@@ -57,6 +69,26 @@ function leaders(s: SeasonState, squad: Player[]): ReviewPlayer[] {
   leader((p) => tot(p).lineBreaks, (p) => `Most line breaks: ${tot(p).lineBreaks}`);
   leader((p) => tot(p).turnovers, (p) => `Most turnovers won: ${tot(p).turnovers}`);
   return out;
+}
+
+/**
+ * Who has grown most. Training is already in their ratings; offseason growth is previewed by running the
+ * same deterministic development step that starting the next season will run, on a copy of your squad.
+ */
+function developed(s: SeasonState): ReviewDeveloped[] {
+  const team = teamById(s, s.managedId);
+  const after = structuredClone(team);
+  const retiring = evolvePlayers([after], hashSeed(s.seed, s.season + 1), (id) => playShare(s.seasonStats[id]?.apps ?? 0, s.totalMatchdays));
+  const gone = new Set((retiring.get(team.id) ?? []).map((p) => p.id));
+  const out: (ReviewDeveloped & { score: number })[] = [];
+  for (const p of team.players) {
+    if (gone.has(p.id)) continue;
+    const trained = Object.values(s.trainGains?.[p.id] ?? {}).reduce((n, v) => n + (v ?? 0), 0);
+    const growth = Math.max(0, overall(after.players.find((x) => x.id === p.id)!) - overall(p));
+    const score = trained / 6 + growth;
+    if (score > 0) out.push({ player: p, trained, growth, apps: s.seasonStats[p.id]?.apps ?? 0, score });
+  }
+  return out.sort((a, b) => b.score - a.score || b.apps - a.apps || a.player.name.localeCompare(b.player.name)).slice(0, 3);
 }
 
 /** Null until the season is over. The money is what starting the next season will pay, worked out here the same way. */
@@ -110,6 +142,7 @@ export function reviewSeason(s: SeasonState): SeasonReview | null {
     bestWin,
     worstLoss,
     players: leaders(s, me.players),
+    developed: developed(s),
     topScorerIsYours: topIsYours && leagueTop > 0,
     records: recordText,
   };

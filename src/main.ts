@@ -705,6 +705,13 @@ function reviewCard(s: SeasonState): HTMLElement {
     r.players.forEach((pl, i) => children.push(h("div", { class: "potm-row" }, ...(i === 0 ? [avatarBadge(pl.player, s.gender, "md")] : []), h("div", { class: i === 0 ? "potm-line" : "rv-leader" }, h("b", {}, pl.player.name), h("div", { class: "dim" }, pl.label)))));
     if (r.topScorerIsYours) children.push(h("div", { class: "goal-status ok" }, "★ Your player finished as the league's top scorer."));
   }
+  if (r.developed.length) {
+    children.push(h("h2", { class: "sub" }, "Best developed (growth lands when the new season starts)"));
+    r.developed.forEach((d, i) => {
+      const bits = [d.trained ? `${d.trained} training point${d.trained === 1 ? "" : "s"}` : "", d.growth ? `+${d.growth} from ${d.apps} of ${s.totalMatchdays} matches played` : ""].filter(Boolean);
+      children.push(h("div", { class: "potm-row" }, ...(i === 0 ? [avatarBadge(d.player, s.gender, "md")] : []), h("div", { class: i === 0 ? "potm-line" : "rv-leader" }, h("b", {}, `${d.player.name} (${d.player.age})`), h("div", { class: "dim" }, `${i === 0 ? "Most improved: " : ""}${bits.join(", ")}`))));
+    });
+  }
   if (r.records.length) {
     children.push(h("h2", { class: "sub" }, "New club records"), ...r.records.map((x) => h("div", { class: "dim" }, `★ ${x}`)));
   }

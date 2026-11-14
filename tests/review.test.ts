@@ -24,6 +24,18 @@ describe("season review", () => {
     expect(r.record.won + r.record.drawn + r.record.lost).toBe(s.totalMatchdays);
     expect(r.finish).toBe(next.history.at(-1)!.managedPosition);
   });
+  it("previews the offseason growth exactly as the next season applies it", async () => {
+    const s = finished();
+    const r = reviewSeason(s)!;
+    const { startNextSeason } = await import("../src/league/season");
+    const { overall } = await import("../src/league/teams");
+    const next = startNextSeason(s);
+    for (const d of r.developed) {
+      const before = overall(d.player);
+      const now = next.teams.find((t) => t.id === s.managedId)!.players.find((p) => p.id === d.player.id)!;
+      expect(overall(now) - before).toBeGreaterThanOrEqual(d.growth - 1);
+    }
+  });
   it("names a player of the season from the squad", () => {
     const r = reviewSeason(finished())!;
     expect(r.players[0].label).toMatch(/^Player of the season/);
