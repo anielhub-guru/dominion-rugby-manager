@@ -86,7 +86,7 @@ export function avatarCanvas(look: Look, label: string): HTMLCanvasElement {
 }
 
 /** A small framed avatar for a player, or null when there is no artwork (men's league) or the player has left. */
-export function avatarBadge(p: Player | undefined, gender: Gender, size: "sm" | "md" = "md"): HTMLElement | null {
+export function avatarBadge(p: Player | undefined, gender: Gender, size: "sm" | "md" | "lg" = "md"): HTMLElement | null {
   const look = p && lookOf(p, gender);
   if (!p || !look) return null;
   const box = document.createElement("div");

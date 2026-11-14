@@ -41,7 +41,7 @@ import { buildRules } from "./viewer/rules";
 import { buildTable } from "./viewer/table";
 import { championsCard, clubCard } from "./viewer/history";
 import { reviewSeason } from "./league/review";
-import { adviseRecruitment } from "./league/recruit";
+import { adviseRecruitment, type Part } from "./league/recruit";
 
 type Tab = "overview" | "squad" | "training" | "table" | "fixtures" | "history";
 const TABS: [Tab, string][] = [
@@ -433,20 +433,44 @@ let planKey = "";
 
 const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
-function offseasonCard(s: SeasonState): HTMLElement {
+/** Compare panel state: the player being compared against (null = chosen automatically), and which view is showing. */
+let compareId: string | null = null;
+let cmpMode: "player" | "squad" = "player";
+
+/**
+ * The offseason screen. Recommendations first, the three lists under them, and a compare panel that stays in
+ * view: click any name, here or in the scouts' notes, to put that player beside someone in your squad.
+ */
+function offseasonView(s: SeasonState): HTMLElement {
   const intake = s.intake!;
   const key = `${s.seed}:${s.season}`;
   if (planKey !== key) {
     plan = autoPlan(s);
     planKey = key;
+    inspectId = null;
+    compareId = null;
   }
   const team = teamById(s, s.managedId);
   const check = checkPlan(s, plan);
   const retiring = new Set(intake.retiring);
+  const advice = adviseRecruitment(check.roster, intake, plan, check.moneyAfter);
+  const everyone = [...team.players, ...intake.prospects, ...intake.market.map((l) => l.player)];
+  const find = (id: string | null) => (id ? everyone.find((p) => p.id === id) : undefined);
+  const focus = find(inspectId) ?? advice.recommendations[0]?.player ?? intake.market[0]?.player ?? null;
+  const isOwn = (p: Player) => team.players.some((x) => x.id === p.id);
   const inspect = (id: string) => {
-    inspectId = inspectId === id ? null : id;
+    cmpMode = "player";
+    // Clicking one of your own while looking at a scouted player sets them side by side.
+    if (focus && !isOwn(focus) && team.players.some((p) => p.id === id)) compareId = id;
+    else {
+      inspectId = id;
+      compareId = null;
+    }
     render();
   };
+  const link = (p: Player, text = p.name) => h("span", { class: "link", title: "Compare this player", onclick: () => inspect(p.id) }, text);
+  const parts = (ps: Part[]) => ps.map((x) => (typeof x === "string" ? x : link(x)));
+  const portrait = (p: Player, size: "sm" | "md" | "lg") => avatarBadge(p, s.gender, size) ?? h("div", { class: `avatar-badge ${size} blank` }, p.name.split(" ").map((w) => w[0]).join(""));
   const attrHead = ATTRS.map((a) => h("th", { title: ATTR_INFO[a][1] }, ATTR_INFO[a][0]));
   const attrCells = (p: Player) => ATTRS.map((a) => h("td", {}, String(p[a])));
   const act = (label: string, on: boolean, fn: () => void, disabled = false) => {
@@ -457,20 +481,33 @@ function offseasonCard(s: SeasonState): HTMLElement {
     };
     return b;
   };
+  /** Sell, Sign or Buy for whoever this player is, or nothing if they are retiring. */
+  const actionFor = (p: Player): HTMLElement | null => {
+    if (isOwn(p)) return retiring.has(p.id) ? null : act(plan.sell.includes(p.id) ? "Keep" : "Sell", plan.sell.includes(p.id), () => (plan = { ...plan, sell: toggle(plan.sell, p.id) }));
+    if (intake.prospects.some((x) => x.id === p.id)) return act(plan.sign.includes(p.id) ? "Signed" : "Sign", plan.sign.includes(p.id), () => (plan = { ...plan, sign: toggle(plan.sign, p.id) }));
+    const on = plan.buy.includes(p.id);
+    return act(on ? "Buying" : "Buy", on, () => (plan = { ...plan, buy: toggle(plan.buy, p.id) }), !on && plan.buy.length >= MAX_BUYS);
+  };
+  const moneyLine = (p: Player): string => {
+    if (isOwn(p)) return `Sells for ${fmtMoney(sellPrice(p))}, wage ${fmtMoney(wageOf(p))}`;
+    const l = intake.market.find((x) => x.player.id === p.id);
+    return l ? `Asking ${fmtMoney(l.price)}` : `Sale if unsigned ${fmtMoney(teenSalePrice(p))}`;
+  };
+  const nameCell = (p: Player, ...chips: (Node | null)[]) => h("td", { class: "club" }, h("div", { class: "namecell" }, portrait(p, "sm"), h("span", { class: "link", title: "Compare this player", onclick: () => inspect(p.id) }, p.name), ...chips));
 
   // 1. Your squad: sell anyone not retiring.
   const squad = h("table", { class: "squad" });
-  squad.append(h("thead", {}, h("tr", {}, h("th", { class: "club" }, "Your squad"), h("th", {}, "Role"), h("th", {}, "Age"), h("th", {}, "Pot"), ...attrHead, h("th", {}, "Overall"), h("th", { title: "What a club pays you for them" }, "Sale price"), h("th", { title: "Paid each season" }, "Wage"), h("th", {}, ""))));
+  squad.append(h("thead", {}, h("tr", {}, h("th", { class: "club" }, "Player"), h("th", {}, "Role"), h("th", {}, "Age"), h("th", {}, "Pot"), ...attrHead, h("th", {}, "Overall"), h("th", { title: "What a club pays you for them" }, "Sale price"), h("th", { title: "Paid each season" }, "Wage"), h("th", {}, ""))));
   const sb = h("tbody");
   for (const p of team.players) {
     const gone = retiring.has(p.id);
     const sold = plan.sell.includes(p.id);
     sb.append(
-      h("tr", { class: gone || sold ? "bench" : "" },
-        h("td", { class: "club link", title: "Show profile", onclick: () => inspect(p.id) }, p.name, gone ? h("span", { class: "card-chip r" }, "RETIRING") : null, sold ? h("span", { class: "card-chip y" }, "SELLING") : null),
+      h("tr", { class: `${gone || sold ? "bench" : ""} ${p.id === focus?.id ? "insp" : ""}` },
+        nameCell(p, gone ? h("span", { class: "card-chip r" }, "RETIRING") : null, sold ? h("span", { class: "card-chip y" }, "SELLING") : null),
         h("td", {}, p.role), h("td", {}, String(p.age)), h("td", { class: "stars" }, stars(p.potential ?? 0)), ...attrCells(p),
         h("td", { class: "pts" }, String(overall(p))), h("td", {}, fmtMoney(sellPrice(p))), h("td", {}, fmtMoney(wageOf(p))),
-        h("td", {}, gone ? "" : act(sold ? "Keep" : "Sell", sold, () => (plan = { ...plan, sell: toggle(plan.sell, p.id) })))),
+        h("td", {}, actionFor(p))),
     );
   }
   squad.append(sb);
@@ -478,42 +515,69 @@ function offseasonCard(s: SeasonState): HTMLElement {
   // 2. Youth shortlist. Unpicked prospects are sold, so signing one costs you that sale.
   const vacated = new Set(intake.retiring.map((id) => team.players.find((p) => p.id === id)!.role));
   const youth = h("table", { class: "squad" });
-  youth.append(h("thead", {}, h("tr", {}, h("th", { class: "club" }, "Youth shortlist"), h("th", {}, "Role"), h("th", {}, "Age"), h("th", { title: "Scouting estimate of how good they can become. Reports can be off by about a star." }, "Potential"), ...attrHead, h("th", {}, "Overall"), h("th", { title: "What you get if you do not sign them" }, "Sale if unsigned"), h("th", {}, ""))));
+  youth.append(h("thead", {}, h("tr", {}, h("th", { class: "club" }, "Prospect"), h("th", {}, "Role"), h("th", {}, "Age"), h("th", { title: "Scouting estimate of how good they can become. Reports can be off by about a star." }, "Potential"), ...attrHead, h("th", {}, "Overall"), h("th", { title: "What you get if you do not sign them" }, "Sale if unsigned"), h("th", {}, ""))));
   const yb = h("tbody");
   for (const p of intake.prospects) {
-    const on = plan.sign.includes(p.id);
     yb.append(
-      h("tr", { class: on ? "sel" : "" },
-        h("td", { class: "club link", title: "Show profile", onclick: () => inspect(p.id) }, p.name, vacated.has(p.role) ? h("span", { class: "oop", title: "Fills a retirement" }, " ●") : null),
+      h("tr", { class: `${plan.sign.includes(p.id) ? "sel" : ""} ${p.id === focus?.id ? "insp" : ""}` },
+        nameCell(p, vacated.has(p.role) ? h("span", { class: "oop", title: "Fills a retirement" }, " ●") : null),
         h("td", {}, p.role), h("td", {}, String(p.age)), h("td", { class: "stars" }, stars(p.scouted ?? 0)), ...attrCells(p),
         h("td", { class: "pts" }, String(overall(p))), h("td", {}, fmtMoney(teenSalePrice(p))),
-        h("td", {}, act(on ? "Signed" : "Sign", on, () => (plan = { ...plan, sign: toggle(plan.sign, p.id) })))),
+        h("td", {}, actionFor(p))),
     );
   }
   youth.append(yb);
 
   // 3. Transfer list: other clubs' players. You see their ratings, not their true potential.
   const market = h("table", { class: "squad" });
-  market.append(h("thead", {}, h("tr", {}, h("th", { class: "club" }, "Transfer list"), h("th", {}, "Club"), h("th", {}, "Role"), h("th", {}, "Age"), h("th", { title: "Scouting estimate, not the truth" }, "Potential"), ...attrHead, h("th", {}, "Overall"), h("th", {}, "Asking"), h("th", {}, ""))));
+  market.append(h("thead", {}, h("tr", {}, h("th", { class: "club" }, "Listed player"), h("th", {}, "Club"), h("th", {}, "Role"), h("th", {}, "Age"), h("th", { title: "Scouting estimate, not the truth" }, "Potential"), ...attrHead, h("th", {}, "Overall"), h("th", {}, "Asking"), h("th", {}, ""))));
   const mb = h("tbody");
   for (const l of intake.market) {
     const p = l.player;
-    const on = plan.buy.includes(p.id);
     mb.append(
-      h("tr", { class: on ? "sel" : "" },
-        h("td", { class: "club link", title: "Show profile", onclick: () => inspect(p.id) }, p.name), h("td", {}, teamById(s, l.clubId).short), h("td", {}, p.role), h("td", {}, String(p.age)), h("td", { class: "stars" }, stars(p.scouted ?? 0)), ...attrCells(p),
+      h("tr", { class: `${plan.buy.includes(p.id) ? "sel" : ""} ${p.id === focus?.id ? "insp" : ""}` },
+        nameCell(p), h("td", {}, teamById(s, l.clubId).short), h("td", {}, p.role), h("td", {}, String(p.age)), h("td", { class: "stars" }, stars(p.scouted ?? 0)), ...attrCells(p),
         h("td", { class: "pts" }, String(overall(p))), h("td", {}, fmtMoney(l.price)),
-        h("td", {}, act(on ? "Buying" : "Buy", on, () => (plan = { ...plan, buy: toggle(plan.buy, p.id) }), !on && plan.buy.length >= MAX_BUYS))),
+        h("td", {}, actionFor(p))),
     );
   }
   market.append(mb);
 
-  /** Your best five now against after your plan, plus the profile of whoever you clicked. */
-  function radarBlocks(): HTMLElement[] {
-    const out: HTMLElement[] = [];
+  // Recommendations, as cards with big portraits.
+  const cards = advice.recommendations.map((r) => {
+    const cmp = h("button", {}, r.player.id === focus?.id ? "Comparing" : "Compare");
+    cmp.onclick = () => inspect(r.player.id);
+    const tag = r.source === "youth" ? "YOUTH" : r.price === "cheap" ? "TRANSFER · CHEAP" : r.price === "dear" ? "TRANSFER · STEEP" : "TRANSFER";
+    return h("div", { class: `rec ${r.player.id === focus?.id ? "active" : ""}` },
+      portrait(r.player, "lg"),
+      h("div", { class: "rec-body" },
+        h("div", { class: "rec-need" }, r.need, h("span", { class: `card-chip ${r.source === "youth" ? "y" : r.price === "dear" ? "r" : ""}` }, tag)),
+        h("div", { class: "rec-name" }, link(r.player), h("span", { class: "dim" }, `  ${r.role}, ${r.player.age}`)),
+        h("div", {}, h("b", {}, `Overall ${overall(r.player)}`), " ", h("span", { class: "stars" }, stars(r.player.scouted ?? 0)), h("span", { class: "dim" }, `  ${moneyLine(r.player)}`)),
+        h("div", { class: "dim" }, ...parts(r.detail)),
+        h("div", { class: "toolbar" }, cmp, actionFor(r.player))));
+  });
+  const adviceCard = card("Recruitment advice",
+    ...(cards.length ? [h("div", { class: "rec-grid" }, ...cards)] : []),
+    ...(advice.settled ? [h("div", { class: "dim" }, advice.settled)] : []),
+    ...(advice.warning ? [h("div", { class: "rec-warn" }, "Be careful: ", ...parts(advice.warning.parts))] : []),
+    h("div", { class: "hint" }, "Built from ratings and scouting reports. Scouts can be off by about a star, and a prospect's true potential stays hidden until you sign them. Click any name to compare."));
+
+  // The compare panel.
+  const tabs = h("div", { class: "toolbar" });
+  for (const [mode, label] of [["player", "Player compare"], ["squad", "Squad: now vs after plan"]] as const) {
+    const b = h("button", { class: cmpMode === mode ? "primary" : "" }, label);
+    b.onclick = () => {
+      cmpMode = mode;
+      render();
+    };
+    tabs.append(b);
+  }
+  const best = (role: string) => team.players.filter((p) => p.role === role).sort((a, b) => Number(retiring.has(a.id)) - Number(retiring.has(b.id)) || overall(b) - overall(a))[0];
+  const body: HTMLElement[] = [];
+  if (cmpMode === "squad" || !focus) {
     if (check.roster.length >= 5) {
-      out.push(h("div", { class: "hint" }, "Your best five now (before retirements) against after your plan. Click any name below to see that player's profile."));
-      out.push(buildRadar(
+      body.push(buildRadar(
         [
           { id: "after", label: "After your plan", values: profileOf(bestFive(check.roster)), color: "--r1" },
           { id: "now", label: "Now", values: profileOf(bestFive(team.players)), color: "--r2", alt: true },
@@ -521,23 +585,33 @@ function offseasonCard(s: SeasonState): HTMLElement {
         { title: "Starting five, now and after your plan", focus: TACTIC_FOCUS[s.tactic], note: s.tactic === "balanced" ? undefined : `Your tactic is ${TACTICS[s.tactic].label}.` },
       ));
     }
-    const who = inspectId ? [...team.players, ...intake.prospects, ...intake.market.map((l) => l.player)].find((p) => p.id === inspectId) : null;
-    if (who) {
-      const own = team.players.some((p) => p.id === who.id);
-      const rival = own
-        ? null
-        : team.players.filter((p) => p.role === who.role).sort((a, b) => Number(retiring.has(a.id)) - Number(retiring.has(b.id)) || overall(b) - overall(a))[0] ?? null;
-      const base = rival;
-      out.push(buildRadar(
+  } else {
+    const chosen = compareId === "five" ? "five" : find(compareId) && compareId !== focus.id ? find(compareId)! : isOwn(focus) ? "five" : best(focus.role) ?? "five";
+    const sel = h("select", { title: "Compare with" });
+    const opt = (value: string, label: string) => h("option", { value, selected: (compareId ?? "") === value }, label);
+    const group = (label: string, ps: Player[]) => h("optgroup", { label }, ...ps.filter((p) => p.id !== focus.id).map((p) => opt(p.id, `${p.name} (${p.role}, ${overall(p)})`)));
+    sel.append(opt("", `Auto: ${chosen === "five" ? "your best five" : chosen.name}`), opt("five", "Your best five"), group("Your squad", team.players), group("Youth shortlist", intake.prospects), group("Transfer list", intake.market.map((l) => l.player)));
+    sel.onchange = () => {
+      compareId = sel.value || null;
+      render();
+    };
+    const head = (p: Player) => h("div", { class: "cmp-head" }, portrait(p, "lg"), h("div", {}, h("b", {}, p.name), h("div", { class: "dim" }, `${p.role}, age ${p.age}${isOwn(p) ? " (yours)" : ""}`), h("div", {}, h("b", { class: "big" }, String(overall(p))), " ", h("span", { class: "stars" }, stars(isOwn(p) ? (p.potential ?? 0) : (p.scouted ?? 0)))), h("div", { class: "dim" }, moneyLine(p)), h("div", { class: "toolbar" }, actionFor(p))));
+    const other = chosen === "five" ? h("div", { class: "cmp-head" }, h("div", {}, h("b", {}, "Your best five"), h("div", { class: "dim" }, "Average of your starters after the plan"))) : head(chosen);
+    body.push(
+      h("div", { class: "cmp-heads" }, head(focus), other),
+      h("label", { class: "dim" }, "Compare with ", sel),
+      buildRadar(
         [
-          { id: "who", label: who.name, values: playerProfile(who), color: "--r1" },
-          base ? { id: "base", label: `${base.name} (yours)`, values: playerProfile(base), color: "--r2", alt: true } : { id: "base", label: "Your best five", values: profileOf(bestFive(team.players)), color: "--r2", alt: true },
+          { id: "a", label: focus.name, values: playerProfile(focus), color: "--r1" },
+          { id: "b", label: chosen === "five" ? "Your best five" : chosen.name, values: chosen === "five" ? profileOf(bestFive(check.roster.length >= 5 ? check.roster : team.players)) : playerProfile(chosen), color: "--r2", alt: true },
         ],
-        { title: `Profile of ${who.name}`, note: `${who.role}, age ${who.age}, overall ${overall(who)}. Potential is a scouting estimate for players who are not yours: ${stars(who.scouted ?? who.potential ?? 0)}.` },
-      ));
-    }
-    return out;
+        { title: `${focus.name} compared`, focus: TACTIC_FOCUS[s.tactic], note: isOwn(focus) ? undefined : `Potential is a scouting estimate: ${stars(focus.scouted ?? 0)}.` },
+      ),
+    );
   }
+  const comparePanel = card("Compare", tabs, ...body);
+  comparePanel.classList.add("cmp");
+
   const confirm = h("button", { class: "primary", disabled: busy || !check.ok }, "Confirm and start the season");
   confirm.onclick = () => void guarded(async () => void (await persist(completeOffseason(s, plan))));
   const reset = h("button", {}, "Reset to default");
@@ -548,19 +622,21 @@ function offseasonCard(s: SeasonState): HTMLElement {
   const money = (label: string, v: number, sign = "") => h("span", { class: "dim" }, `${label} ${sign}${fmtMoney(v)}   `);
   const summary = h("div", { class: "advice" },
     h("b", {}, `Squad ${check.size}/${SQUAD_SIZE}   `), money("Balance now", s.money), money("Unpicked prospects sold", check.teenIncome, "+"), money("Sales", check.sellIncome, "+"), money("Purchases", check.buyCost, "-"), h("b", {}, `Balance after ${fmtMoney(check.moneyAfter)}`));
-  return card(
-    `Season ${s.season}: offseason`,
+  const top = card(`Season ${s.season}: offseason`,
     h("p", { class: "dim" }, "Get the squad back to ten before the season starts. Prospects you do not sign are sold."),
     summary,
     ...(check.problems.length ? [h("div", { class: "err" }, check.problems.join(" "))] : []),
-    ...radarBlocks(),
-    squad,
-    h("div", { class: "hint" }, `Youth shortlist: ● marks a position that lost a player. Prospects start weaker than established players and grow, so a teenager is an investment.`),
-    youth,
-    h("div", { class: "hint" }, `Transfer list: at most ${MAX_BUYS} signings per offseason. The selling club replaces the player with a youngster.`),
-    market,
-    h("div", { class: "toolbar" }, confirm, reset),
-  );
+    h("div", { class: "toolbar" }, confirm, reset));
+
+  return h("div", { class: "offseason" },
+    top,
+    h("div", { class: "grid off-grid" },
+      h("div", { class: "col" },
+        adviceCard,
+        card("Your squad", squad),
+        card("Youth shortlist", h("div", { class: "hint" }, "● marks a position that lost a player. Prospects start weaker than established players and grow, so a teenager is an investment."), youth),
+        card("Transfer list", h("div", { class: "hint" }, `At most ${MAX_BUYS} signings per offseason. The selling club replaces the player with a youngster.`), market)),
+      h("div", { class: "col sticky" }, comparePanel, card("Club news", h("ul", { class: "news" }, ...s.news.slice(0, 5).map(newsItem))))));
 }
 
 const OFFER_COPY: Record<ClubOffer["tier"], { kicker: string; line: string; stay: (club: string) => string }> = {
@@ -606,7 +682,17 @@ function offersCard(s: SeasonState): HTMLElement {
   );
 }
 
+function newsItem(n: SeasonState["news"][number]) {
+  const stamp = h("span", { class: "dim" }, n.matchday ? `S${n.season} MD${n.matchday}  ` : `S${n.season}  `);
+  if (n.kind === "title") {
+    return h("li", { class: "news-title" }, h("div", { class: "trophy" }, "🏆"), h("div", { class: "nt-body" }, h("div", { class: "nt-kicker" }, `SEASON ${n.season} · LEAGUE CHAMPIONS`), h("div", { class: "nt-text" }, n.text)));
+  }
+  if (n.kind === "finish") return h("li", { class: "news-finish" }, h("span", { class: "pos-badge" }, `${n.position}`), h("div", {}, stamp, n.text));
+  return h("li", {}, stamp, n.text);
+}
+
 function overviewView(s: SeasonState): HTMLElement {
+  if (s.intake && !s.offers?.length) return offseasonView(s);
   const me = teamById(s, s.managedId);
   const ids = s.teams.map((t) => t.id);
   const table = computeStandings(ids, s.fixtures);
@@ -615,8 +701,6 @@ function overviewView(s: SeasonState): HTMLElement {
 
   if (s.offers?.length) {
     left.append(offersCard(s));
-  } else if (s.intake) {
-    left.append(offseasonCard(s));
   } else if (isSeasonOver(s)) {
     const champ = teamById(s, table[0].teamId);
     const next = h("button", { class: "primary" }, "Start next season");
@@ -661,18 +745,9 @@ function overviewView(s: SeasonState): HTMLElement {
   const review = isSeasonOver(s) && !s.offers?.length && !s.intake ? reviewSeason(s) : null;
   if (review) left.append(reviewCard(s, review));
 
-  const newsItem = (n: SeasonState["news"][number]) => {
-    const stamp = h("span", { class: "dim" }, n.matchday ? `S${n.season} MD${n.matchday}  ` : `S${n.season}  `);
-    if (n.kind === "title") {
-      return h("li", { class: "news-title" }, h("div", { class: "trophy" }, "🏆"), h("div", { class: "nt-body" }, h("div", { class: "nt-kicker" }, `SEASON ${n.season} · LEAGUE CHAMPIONS`), h("div", { class: "nt-text" }, n.text)));
-    }
-    if (n.kind === "finish") return h("li", { class: "news-finish" }, h("span", { class: "pos-badge" }, `${n.position}`), h("div", {}, stamp, n.text));
-    return h("li", {}, stamp, n.text);
-  };
   const right = h("div", { class: "col" },
     card("League table", buildTable(s, { compact: true, onClub: (id) => (id === s.managedId ? undefined : scout(s, id)) })),
     card("Club news", h("ul", { class: "news" }, ...s.news.slice(0, 8).map(newsItem))),
-    ...(s.intake && !s.offers?.length ? [recruitmentCard(s)] : []),
     ...(review ? [...(review.players.length ? [leadersCard(s, review)] : []), leagueCard(s, review)] : []));
   return h("div", { class: "grid" }, left, right);
 }
@@ -740,28 +815,6 @@ function reviewCard(s: SeasonState, r: NonNullable<ReturnType<typeof reviewSeaso
     children.push(h("h2", { class: "sub" }, "New club records"), ...r.records.map((x) => h("div", { class: "dim" }, `★ ${x}`)));
   }
   return card(`Season ${s.season} review`, ...children);
-}
-
-/** Who the recruitment staff would look at, given the squad as it will be after your current plan. */
-function recruitmentCard(s: SeasonState): HTMLElement {
-  const check = checkPlan(s, plan);
-  const advice = adviseRecruitment(check.roster, s.intake!, plan, check.moneyAfter);
-  const kids: (Node | string)[] = [];
-  for (const r of advice.recommendations) {
-    const b = h("button", { disabled: r.source === "market" && plan.buy.length >= MAX_BUYS }, r.source === "youth" ? "Sign" : "Buy");
-    b.onclick = () => {
-      plan = r.source === "youth" ? { ...plan, sign: toggle(plan.sign, r.player.id) } : { ...plan, buy: toggle(plan.buy, r.player.id) };
-      render();
-    };
-    kids.push(h("div", { class: "rec" },
-      avatarBadge(r.player, s.gender, "sm"),
-      h("div", { class: "rec-body" }, h("b", {}, r.headline), h("span", { class: `card-chip ${r.source === "youth" ? "y" : r.price === "dear" ? "r" : ""}` }, r.source === "youth" ? "YOUTH" : `TRANSFER${r.price === "cheap" ? " · CHEAP" : ""}`), h("div", { class: "dim" }, r.detail)),
-      b));
-  }
-  if (advice.settled) kids.push(h("div", { class: "dim" }, advice.settled));
-  if (advice.warning) kids.push(h("div", { class: "rec-warn" }, `Be careful: ${advice.warning}`));
-  kids.push(h("div", { class: "hint" }, "Based on ratings and scouting reports. Scouts can be off by about a star, and a prospect's true potential stays hidden until you sign them."));
-  return card("Recruitment advice", ...kids);
 }
 
 /** Club goal progress and the state of the rivalry, for the overview. */

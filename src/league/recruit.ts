@@ -4,22 +4,28 @@ import { playerValue, teenSalePrice } from "./economy";
 import type { Intake, OffseasonPlan } from "./season";
 import { overall } from "./teams";
 
+/** Text for the screen. A Player in the list is a name the manager can click. */
+export type Part = string | Player;
+
 export interface Recommendation {
   player: Player;
   source: "youth" | "market";
   role: Role;
   /** Asking price for a listed player, or the sale you give up by signing a prospect. */
   cost: number;
-  headline: string;
-  detail: string;
-  /** "Fair", "cheap" or "dear" against what the scouts reckon the player is worth. Listed players only. */
+  /** Why this position, such as "Anchor is your weak spot". */
+  need: string;
+  /** The player now holding the position, if anyone is. */
+  incumbent?: Player;
+  /** Listed players only: how the asking price compares with what the scouts reckon the player is worth. */
   price?: "cheap" | "fair" | "dear";
+  detail: Part[];
 }
 
 export interface Advice {
   recommendations: Recommendation[];
   /** A listing to be wary of, if there is one. */
-  warning?: string;
+  warning?: { player: Player; parts: Part[] };
   /** Said when nothing needs fixing. */
   settled?: string;
 }
@@ -55,27 +61,26 @@ export function adviseRecruitment(roster: Player[], intake: Intake, plan: Offsea
 
   const recommendations: Recommendation[] = [];
   const used = new Set<string>();
-  const describe = (c: (typeof cands)[number], role: Role, incumbent: Player | undefined): Recommendation => {
+  const describe = (c: (typeof cands)[number], role: Role, incumbent: Player | undefined, need: string): Recommendation => {
     const p = c.player;
     const ovr = overall(p);
     const gap = incumbent ? ovr - overall(incumbent) : 0;
-    const stars = pot(p);
     if (c.source === "youth") {
-      return { player: p, source: "youth", role, cost: c.cost, headline: `${p.name}, ${role}, ${p.age}`, detail: `Rated ${ovr} now, scouts see up to ${stars}. ${incumbent ? (gap > 0 ? `Already ahead of ${incumbent.name}.` : `Behind ${incumbent.name} (${overall(incumbent)}) for now.`) : "Fills the gap at once."} Signing costs the ${fmt(c.cost)} sale.` };
+      const versus: Part[] = incumbent ? (gap > 0 ? ["Already ahead of ", incumbent, "."] : ["Behind ", incumbent, ` (${overall(incumbent)}) for now.`]) : ["Fills the gap at once."];
+      return { player: p, source: "youth", role, cost: c.cost, need, ...(incumbent ? { incumbent } : {}), detail: [`Scouts put the potential at ${pot(p)}. `, ...versus, ` Signing costs the ${fmt(c.cost)} sale.`] };
     }
-    const est = playerValue(p, stars);
+    const est = playerValue(p, pot(p));
     const ratio = c.cost / Math.max(1, est);
     const price = ratio < 0.9 ? "cheap" : ratio > 1.25 ? "dear" : "fair";
-    return { player: p, source: "market", role, cost: c.cost, price, headline: `${p.name}, ${role}, ${p.age}`, detail: `Rated ${ovr}${incumbent ? `, ${gap >= 0 ? `${gap} better than` : `${-gap} short of`} ${incumbent.name}` : ""}. Asking ${fmt(c.cost)}: ${price === "cheap" ? "scouts think that is cheap" : price === "dear" ? "scouts think that is steep" : "about what scouts expect"}.` };
+    const versus: Part[] = incumbent ? [`${gap >= 0 ? `${gap} better than` : `${-gap} short of`} `, incumbent, ". "] : [];
+    return { player: p, source: "market", role, cost: c.cost, price, need, ...(incumbent ? { incumbent } : {}), detail: [...versus, `Scouts think the price is ${price === "cheap" ? "cheap" : price === "dear" ? "steep" : "about right"}.`] };
   };
 
   for (const n of needs.slice(0, 3)) {
     const pick = cands.filter((c) => c.player.role === n.role && !used.has(c.player.id) && affordable(c)).sort((a, b) => score(b) - score(a))[0];
     if (!pick) continue;
     used.add(pick.player.id);
-    const r = describe(pick, n.role, n.incumbent);
-    r.headline = n.incumbent ? `${n.role} is your weak spot: ${r.headline}` : `No ${n.role}: ${r.headline}`;
-    recommendations.push(r);
+    recommendations.push(describe(pick, n.role, n.incumbent, n.incumbent ? `${n.role} is your weak spot` : `No ${n.role}`));
   }
   // With nothing pressing, look for outright upgrades that are not overpriced.
   if (!recommendations.length) {
@@ -83,7 +88,7 @@ export function adviseRecruitment(roster: Player[], intake: Intake, plan: Offsea
       .filter((c) => c.source === "market" && affordable(c) && overall(c.player) > overall(best(c.player.role) ?? c.player) + 3)
       .sort((a, b) => score(b) - score(a))
       .slice(0, 2);
-    for (const c of ups) recommendations.push(describe(c, c.player.role, best(c.player.role)));
+    for (const c of ups) recommendations.push(describe(c, c.player.role, best(c.player.role), "A clear upgrade"));
   }
 
   // The listing that looks worst against its scouted value.
@@ -92,6 +97,6 @@ export function adviseRecruitment(roster: Player[], intake: Intake, plan: Offsea
     .map((l) => ({ l, ratio: l.price / Math.max(1, playerValue(l.player, pot(l.player))) }))
     .filter((x) => x.ratio > 1.4 && x.l.price >= 600)
     .sort((a, b) => b.ratio - a.ratio)[0];
-  const warning = trap ? `${trap.l.player.name} (${trap.l.player.role}, ${trap.l.player.age}) is listed at ${fmt(trap.l.price)}, well above what scouts think the player is worth.` : undefined;
+  const warning = trap ? { player: trap.l.player, parts: [trap.l.player, ` (${trap.l.player.role}, ${trap.l.player.age}) is listed at ${fmt(trap.l.price)}, well above what scouts think the player is worth.`] as Part[] } : undefined;
   return { recommendations, ...(warning ? { warning } : {}), ...(!recommendations.length ? { settled: "No weak spot in the squad. Only buy if someone is a clear step up." } : {}) };
 }

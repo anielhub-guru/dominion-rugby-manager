@@ -6,6 +6,11 @@ drift apart). It is shown in the app footer and on the new-game screen.
 
 ## Unreleased
 
+- Offseason screen redesign. The league table is gone from this screen. The recruitment advice now comes first, as
+  cards with large portraits, and the confirm button sits at the top. A compare panel stays in view beside the lists:
+  click any player (in a list, on a recommendation, or a name in the scouts' notes) to put them on the spider chart
+  next to one of your own, picked automatically by position or from a menu, with Sign, Buy or Sell right there.
+  A second tab keeps the squad view of now against after your plan. Lists show portraits.
 - Recruitment advice. The offseason now fills the empty space beside the squad with up to three suggestions: the
   weakest or empty positions after retirements and your current plan, each with the best youth prospect or
   transfer-listed player for it, what it costs, and whether the scouts think the price is cheap, fair or steep. A
