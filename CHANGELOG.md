@@ -6,6 +6,12 @@ drift apart). It is shown in the app footer and on the new-game screen.
 
 ## Unreleased
 
+- Recruitment advice. The offseason now fills the empty space beside the squad with up to three suggestions: the
+  weakest or empty positions after retirements and your current plan, each with the best youth prospect or
+  transfer-listed player for it, what it costs, and whether the scouts think the price is cheap, fair or steep. A
+  Sign or Buy button adds them to your plan, and the advice updates as the plan changes. It also flags a listing
+  that looks overpriced. It uses only scouting information, never hidden potential. The offseason intro text is
+  shorter.
 - Fixed the play-time clock: the running total went back to zero on every launch, because the startup key
   migration in storage swept up its old `arena:` key. It now uses a `dominion:` key. The season review also gains
   an "around the league" card (champions, top scorer, best attack and defence, and where your club ranks).

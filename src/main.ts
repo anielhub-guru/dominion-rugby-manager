@@ -41,6 +41,7 @@ import { buildRules } from "./viewer/rules";
 import { buildTable } from "./viewer/table";
 import { championsCard, clubCard } from "./viewer/history";
 import { reviewSeason } from "./league/review";
+import { adviseRecruitment } from "./league/recruit";
 
 type Tab = "overview" | "squad" | "training" | "table" | "fixtures" | "history";
 const TABS: [Tab, string][] = [
@@ -549,7 +550,7 @@ function offseasonCard(s: SeasonState): HTMLElement {
     h("b", {}, `Squad ${check.size}/${SQUAD_SIZE}   `), money("Balance now", s.money), money("Unpicked prospects sold", check.teenIncome, "+"), money("Sales", check.sellIncome, "+"), money("Purchases", check.buyCost, "-"), h("b", {}, `Balance after ${fmtMoney(check.moneyAfter)}`));
   return card(
     `Season ${s.season}: offseason`,
-    h("p", { class: "dim" }, "Everything here is optional except refilling the squad to ten (five starters, three on the bench and two reserves). Retirees leave, young prospects grow toward a potential you can only estimate, and prospects you do not sign are sold for income. Other clubs' players on the transfer list are priced by what they are really worth, so a good eye finds a bargain and a bad one finds a trap."),
+    h("p", { class: "dim" }, "Get the squad back to ten before the season starts. Prospects you do not sign are sold."),
     summary,
     ...(check.problems.length ? [h("div", { class: "err" }, check.problems.join(" "))] : []),
     ...radarBlocks(),
@@ -671,6 +672,7 @@ function overviewView(s: SeasonState): HTMLElement {
   const right = h("div", { class: "col" },
     card("League table", buildTable(s, { compact: true, onClub: (id) => (id === s.managedId ? undefined : scout(s, id)) })),
     card("Club news", h("ul", { class: "news" }, ...s.news.slice(0, 8).map(newsItem))),
+    ...(s.intake && !s.offers?.length ? [recruitmentCard(s)] : []),
     ...(review ? [...(review.players.length ? [leadersCard(s, review)] : []), leagueCard(s, review)] : []));
   return h("div", { class: "grid" }, left, right);
 }
@@ -738,6 +740,28 @@ function reviewCard(s: SeasonState, r: NonNullable<ReturnType<typeof reviewSeaso
     children.push(h("h2", { class: "sub" }, "New club records"), ...r.records.map((x) => h("div", { class: "dim" }, `★ ${x}`)));
   }
   return card(`Season ${s.season} review`, ...children);
+}
+
+/** Who the recruitment staff would look at, given the squad as it will be after your current plan. */
+function recruitmentCard(s: SeasonState): HTMLElement {
+  const check = checkPlan(s, plan);
+  const advice = adviseRecruitment(check.roster, s.intake!, plan, check.moneyAfter);
+  const kids: (Node | string)[] = [];
+  for (const r of advice.recommendations) {
+    const b = h("button", { disabled: r.source === "market" && plan.buy.length >= MAX_BUYS }, r.source === "youth" ? "Sign" : "Buy");
+    b.onclick = () => {
+      plan = r.source === "youth" ? { ...plan, sign: toggle(plan.sign, r.player.id) } : { ...plan, buy: toggle(plan.buy, r.player.id) };
+      render();
+    };
+    kids.push(h("div", { class: "rec" },
+      avatarBadge(r.player, s.gender, "sm"),
+      h("div", { class: "rec-body" }, h("b", {}, r.headline), h("span", { class: `card-chip ${r.source === "youth" ? "y" : r.price === "dear" ? "r" : ""}` }, r.source === "youth" ? "YOUTH" : `TRANSFER${r.price === "cheap" ? " · CHEAP" : ""}`), h("div", { class: "dim" }, r.detail)),
+      b));
+  }
+  if (advice.settled) kids.push(h("div", { class: "dim" }, advice.settled));
+  if (advice.warning) kids.push(h("div", { class: "rec-warn" }, `Be careful: ${advice.warning}`));
+  kids.push(h("div", { class: "hint" }, "Based on ratings and scouting reports. Scouts can be off by about a star, and a prospect's true potential stays hidden until you sign them."));
+  return card("Recruitment advice", ...kids);
 }
 
 /** Club goal progress and the state of the rivalry, for the overview. */

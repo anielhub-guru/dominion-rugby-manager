@@ -456,3 +456,10 @@ h2.sub { margin-top: 14px; }
 .rv-row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; border-bottom: 1px solid var(--line); }
 .rv-row.good > span:last-child { color: var(--acc); } .rv-row.bad > span:last-child { color: #ff6b5e; }
 .rv-leader { margin: 4px 0 0 74px; }
+
+/* Recruitment advice */
+.rec { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.rec-body { flex: 1; min-width: 0; }
+.rec-body .card-chip { margin-left: 8px; background: var(--acc); }
+.rec-body .card-chip.y { background: #e0a43a; } .rec-body .card-chip.r { background: #ff6b5e; }
+.rec-warn { margin-top: 8px; color: #e0a43a; }
