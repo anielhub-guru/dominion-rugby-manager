@@ -3,7 +3,7 @@ name = "dominion-league-manager"
 version = "0.10.0"
 description = "Offline text-only 5v5 dominion league management game"
 edition = "2021"
-license = "GPL-3.0-or-later"
+license = "PolyForm-Noncommercial-1.0.0"
 
 [lib]
 name = "dominion_league_lib"
