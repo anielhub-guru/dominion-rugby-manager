@@ -196,7 +196,7 @@ Saves from earlier builds (before the men's/women's league and Nigerian clubs) a
 
 ## Contributing
 
-Bug reports and ideas are welcome. By submitting a contribution you confirm you wrote it, and you grant Oluwaseun Daniel a perpetual, worldwide, irrevocable licence to use, modify and relicense it, including in commercial versions of the game. It is also available to everyone under the project's PolyForm Noncommercial license. Open an issue first for anything bigger than a small fix. Before sending a change, run `npm test` and `(cd src-tauri && cargo test)`. A version bump must follow the steps in [Versioning](#versioning), and gameplay changes should get a line in `CHANGELOG.md`.
+Bug reports and ideas are welcome. By submitting a contribution you confirm you wrote it, and you grant Aiki Hub Technologies a perpetual, worldwide, irrevocable licence to use, modify and relicense it, including in commercial versions of the game. It is also available to everyone under the project's PolyForm Noncommercial license. Open an issue first for anything bigger than a small fix. Before sending a change, run `npm test` and `(cd src-tauri && cargo test)`. A version bump must follow the steps in [Versioning](#versioning), and gameplay changes should get a line in `CHANGELOG.md`.
 
 ## Credits
 
@@ -208,17 +208,17 @@ Dominion is a work of fiction. All clubs, players, names, stats, stories and ima
 
 ## License
 
-Dominion League Manager is free to play, study, modify and share for any noncommercial purpose under the [PolyForm Noncommercial License 1.0.0](LICENSE). Selling it, or using it in a commercial product or service, is not permitted without a separate agreement. For commercial licensing, get in touch with the author.
+Dominion League Manager is free to play, study, modify and share for any noncommercial purpose under the [PolyForm Noncommercial License 1.0.0](LICENSE). Selling it, or using it in a commercial product or service, is not permitted without a separate agreement. For commercial licensing, get in touch with Aiki Hub Technologies.
 
 ```
-Required Notice: Copyright (C) 2026 Oluwaseun Daniel
+Required Notice: Copyright (C) 2026 Aiki Hub Technologies
 ```
 
 Earlier releases were published under the GNU GPL v3. Copies obtained under that licence stay under it; this licence applies to the current version and later ones.
 
 ### Assets and name
 
-The PolyForm licence above covers the source code. The art, cutaway images, commentary text, club names, rosters and league identities are all rights reserved (Copyright (C) 2026 Oluwaseun Daniel). You may use them within the game as distributed, but not extract, resell or reuse them in another product without permission.
+The PolyForm licence above covers the source code. The art, cutaway images, commentary text, club names, rosters and league identities are all rights reserved (Copyright (C) 2026 Aiki Hub Technologies). You may use them within the game as distributed, but not extract, resell or reuse them in another product without permission.
 
 "Dominion" and "Dominion League Manager" are names of this project. The licence gives no right to use them for a fork or derived product; call yours something else and say it is based on this game.
 
