@@ -6,6 +6,8 @@ drift apart). It is shown in the app footer and on the new-game screen.
 
 ## Unreleased
 
+- A frequency menu in the Cutaways control (Rare, Normal, Often, Lots) sets how likely each moment is to get a cutaway,
+  how many play in a match and how far apart they are. Normal is the old behaviour; the choice is remembered.
 - Offseason screen redesign. The league table is gone from this screen. The recruitment advice now comes first, as
   cards with large portraits, and the confirm button sits at the top. A compare panel stays in view beside the lists:
   click any player (in a list, on a recommendation, or a name in the scouts' notes) to put them on the spider chart

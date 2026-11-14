@@ -58,11 +58,19 @@ export const CHANCE: Record<Kind, number> = {
  */
 export const BEFORE: ReadonlySet<Kind> = new Set<Kind>(["kickchase"]);
 
-/** Most cutaways in one match: they are a treat, two or three a game. */
-export const MAX_PER_MATCH = 3;
+export type Frequency = "rare" | "normal" | "often" | "lots";
 
-/** Fewest match seconds between two cutaways in one match, so they stay a treat. */
-export const COOLDOWN_SEC = 420;
+/**
+ * How often cutaways come, chosen in the game. `chance` scales every CHANCE below (capped at 1), `max` is the
+ * most in one match, and `cooldown` is the fewest match seconds between two. Normal is the original feel:
+ * a treat, two or three a game.
+ */
+export const FREQUENCIES: readonly { id: Frequency; label: string; chance: number; max: number; cooldown: number }[] = [
+  { id: "rare", label: "Rare", chance: 0.5, max: 2, cooldown: 600 },
+  { id: "normal", label: "Normal", chance: 1, max: 3, cooldown: 420 },
+  { id: "often", label: "Often", chance: 2, max: 6, cooldown: 240 },
+  { id: "lots", label: "Lots", chance: 4, max: 12, cooldown: 90 },
+];
 
 /**
  * Game hairstyle (Look.portrait, see league/look.ts HAIR) to the lab's hairstyle number:

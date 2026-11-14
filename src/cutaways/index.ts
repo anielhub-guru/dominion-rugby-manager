@@ -2,7 +2,7 @@ import { h } from "../dom";
 import type { Look, MatchEvent, Player, Team } from "../engine/types";
 import { BUILDS, lookOf } from "../league/look";
 import { rand } from "../viewer/scenes";
-import { BEFORE, CHANCE, COOLDOWN_SEC, LAB_HAIR, MAX_PER_MATCH, TRANSITIONS, type Kind, type Transition } from "./data";
+import { BEFORE, CHANCE, FREQUENCIES, LAB_HAIR, TRANSITIONS, type Frequency, type Kind, type Transition } from "./data";
 import { CANVAS_SIZE, cutawayLength, drawFrame, prepare, snapshotField, type Athlete, type CutawayRequest } from "./render";
 
 /**
@@ -15,15 +15,16 @@ import { CANVAS_SIZE, cutawayLength, drawFrame, prepare, snapshotField, type Ath
 interface Settings {
   mode: Transition;
   shake: boolean;
+  freq: Frequency;
 }
 const KEY = "dominion:cutaways";
 
 function loadSettings(): Settings {
   const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const fallback: Settings = { mode: reduced ? "dots" : "diagonal", shake: false };
+  const fallback: Settings = { mode: reduced ? "dots" : "diagonal", shake: false, freq: "normal" };
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? "null") as Partial<Settings> | null;
-    if (saved && TRANSITIONS.some(([id]) => id === saved.mode)) return { mode: saved.mode!, shake: !!saved.shake };
+    if (saved && TRANSITIONS.some(([id]) => id === saved.mode)) return { mode: saved.mode!, shake: !!saved.shake, freq: FREQUENCIES.some((f) => f.id === saved.freq) ? saved.freq! : "normal" };
   } catch {
     // unreadable setting: use the default
   }
@@ -100,9 +101,11 @@ export class Cutaways {
   controls(): HTMLElement {
     const select = h("select", { title: "How an illustrated cutaway cuts in. Choose Off to only see the field." });
     for (const [id, label] of TRANSITIONS) select.append(h("option", { value: id, selected: id === this.settings.mode }, label));
+    const freq = h("select", { title: "How often an illustrated cutaway plays: how likely each moment is, how many a match, and how far apart." });
+    for (const f of FREQUENCIES) freq.append(h("option", { value: f.id, selected: f.id === this.settings.freq }, f.label));
     const shake = h("input", { type: "checkbox", checked: this.settings.shake });
     const save = () => {
-      this.settings = { mode: select.value as Transition, shake: shake.checked };
+      this.settings = { mode: select.value as Transition, shake: shake.checked, freq: freq.value as Frequency };
       try {
         localStorage.setItem(KEY, JSON.stringify(this.settings));
       } catch {
@@ -110,8 +113,9 @@ export class Cutaways {
       }
     };
     select.onchange = save;
+    freq.onchange = save;
     shake.onchange = save;
-    return h("span", { class: "cutaway-controls" }, h("span", { class: "sp" }, "Cutaways"), select, h("label", { class: "shake" }, shake, "Shake"));
+    return h("span", { class: "cutaway-controls" }, h("span", { class: "sp" }, "Cutaways"), select, freq, h("label", { class: "shake" }, shake, "Shake"));
   }
 
   private player(team: Team, by: { name?: string; id?: string }): Player | undefined {
@@ -128,9 +132,10 @@ export class Cutaways {
     const { home, away } = this.host;
     if (this.settings.mode === "dots" || home.gender !== "women") return null;
     const kinds = kindsFor(ev);
-    if (!kinds.length || this.shown >= MAX_PER_MATCH || secOf(ev) - this.lastSec < COOLDOWN_SEC) return null;
+    const f = FREQUENCIES.find((x) => x.id === this.settings.freq) ?? FREQUENCIES[1];
+    if (!kinds.length || this.shown >= f.max || secOf(ev) - this.lastSec < f.cooldown) return null;
     const kind = kinds[Math.floor(rand(ev, 43) * kinds.length)];
-    if (rand(ev, 41) >= CHANCE[kind]) return null;
+    if (rand(ev, 41) >= Math.min(1, CHANCE[kind] * f.chance)) return null;
 
     let a: Player | undefined;
     let b: Player | undefined;
