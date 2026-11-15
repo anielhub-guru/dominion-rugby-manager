@@ -16,15 +16,16 @@ button.big { padding: 9px 18px; font-size: 15px; }
 header { display: flex; align-items: center; gap: 22px; height: 52px; flex: none; border-bottom: 1px solid var(--line); padding: 0 2px; }
 .brand { display: flex; align-items: center; gap: 8px; color: var(--acc); font-weight: bold; font-size: 13px; letter-spacing: 3px; white-space: nowrap; }
 .brand i { width: 10px; height: 10px; background: var(--acc); transform: rotate(45deg); box-shadow: 0 0 10px #8fe3a688; }
-header nav { align-self: stretch; gap: 2px; }
+header nav { align-self: stretch; gap: 2px; flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+header nav::-webkit-scrollbar { display: none; }
 header nav button { position: relative; display: flex; align-items: center; gap: 7px; height: 100%; padding: 0 12px; border: 0; border-radius: 0; background: transparent; color: var(--dim); white-space: nowrap; }
 header nav button:hover:not(:disabled) { background: transparent; color: var(--text); }
 header nav button.active { background: transparent; color: #fff; }
-header nav button.active::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; background: var(--acc); box-shadow: 0 0 8px #8fe3a6aa; }
+header nav button.active::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 2px; background: var(--acc); box-shadow: 0 0 8px #8fe3a6aa; }
 header nav kbd { font: inherit; font-size: 10px; color: var(--dim); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; line-height: 15px; }
 header nav .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--acc); box-shadow: 0 0 6px #8fe3a6aa; }
 header nav button.active kbd { color: var(--acc); border-color: var(--acc); }
-.hclub { display: flex; align-items: center; gap: 9px; flex: 0 1 auto; min-width: 0; }
+.hclub { display: flex; align-items: center; gap: 9px; flex: 0 1 auto; min-width: 28px; }
 .crest { flex: none; width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; font-weight: bold; font-size: 13px; color: #0e1412; background: linear-gradient(135deg, var(--acc), #4fae6c); }
 .hclub .who { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
 .hclub .who b { color: #fff; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -44,7 +45,7 @@ header nav button.active kbd { color: var(--acc); border-color: var(--acc); }
 .more .menu button { text-align: left; background: transparent; border-color: transparent; }
 .more .menu button:hover:not(:disabled) { background: #20372a; }
 @media (max-width: 1340px) { .hactions .ghost { display: none; } .more { display: block; } }
-@media (max-width: 1180px) { .brand span, .hclub .who span, header nav kbd { display: none; } header { gap: 14px; } }
+@media (max-width: 1180px) { .brand span, .hclub .who, header nav kbd { display: none; } header { gap: 12px; } header nav button { padding: 0 9px; } .hactions { padding-left: 12px; } }
 @media (max-width: 900px) { .hclub .who { display: none; } header nav button { padding: 0 9px; } }
 nav { display: flex; gap: 4px; }
 main { flex: 1; overflow: auto; min-height: 0; padding-right: 4px; }
