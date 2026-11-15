@@ -38,7 +38,7 @@ import {
   startProject,
   acceptProposal,
   declineProposal,
-  proposalShare,
+  proposalTerms,
   type ClubOffer,
   type OffseasonPlan,
   SQUAD_SIZE,
@@ -717,17 +717,23 @@ function goTo(to: Tab, label: string): HTMLElement {
   return a;
 }
 
+/** A reminder of any promise to a sponsor to stay at the club. */
+function commitmentNote(s: SeasonState): string {
+  const c = s.commitment;
+  return c ? ` You have promised ${c.sponsor} you will stay through season ${c.untilSeason} (${seasonYear(s.startYear, c.untilSeason)}).` : "";
+}
+
 /** Where a project stands: what is being built and how many matchdays are left, or that the builders are free. */
 function projectStatus(s: SeasonState): string {
   const p = s.project;
-  if (!p) return "No construction under way.";
-  return `Building: ${FACILITIES[p.facility].name}, level ${p.level}. ${p.remaining} matchday${p.remaining === 1 ? "" : "s"} to go.`;
+  if (!p) return "No construction under way." + commitmentNote(s);
+  return `Building: ${FACILITIES[p.facility].name}, level ${p.level}. ${p.remaining} matchday${p.remaining === 1 ? "" : "s"} to go.${commitmentNote(s)}`;
 }
 
 /** A short card for other screens: the construction status and a link to the Projects tab. */
 function projectsSummary(s: SeasonState): HTMLElement {
   const levels = facilitiesOf(s);
-  return card("Club projects", h("div", {}, projectStatus(s)), ...(s.proposal ? [h("div", { class: "advice" }, `The board has proposed upgrading the ${FACILITIES[s.proposal.facility].name}.`)] : []), h("div", { class: "dim" }, FACILITY_IDS.map((id) => `${FACILITIES[id].name} ${levelOf(levels, id)}/${MAX_FACILITY_LEVEL}`).join(" · ")), h("div", { class: "toolbar" }, goTo("projects", "Open club projects →")));
+  return card("Club projects", h("div", {}, projectStatus(s)), ...(s.proposal ? [h("div", { class: "advice" }, s.proposal.kind === "sponsor" ? `${s.proposal.sponsor} has made an offer to help build the ${FACILITIES[s.proposal.facility].name}.` : `The board has proposed upgrading the ${FACILITIES[s.proposal.facility].name}.`)] : []), h("div", { class: "dim" }, FACILITY_IDS.map((id) => `${FACILITIES[id].name} ${levelOf(levels, id)}/${MAX_FACILITY_LEVEL}`).join(" · ")), h("div", { class: "toolbar" }, goTo("projects", "Open club projects →")));
 }
 
 /** Projects tab: the three facilities, what each level does, and the one construction that can run at a time. */
@@ -743,15 +749,19 @@ function projectsView(s: SeasonState): HTMLElement {
     btn.onclick = () => void guarded(async () => void (await persist(startProject(s, id))));
     return h("div", { class: "project" }, h("div", {}, h("b", {}, FACILITIES[id].name), h("span", { class: "dim" }, `  level ${lv} of ${MAX_FACILITY_LEVEL}`), h("div", { class: "dim" }, FACILITIES[id].effect)), btn);
   });
-  const share = proposalShare(s);
-  const proposal = s.proposal && share !== null ? (() => {
-    const id = s.proposal.facility;
-    const cost = upgradeCost(levels, id)!;
-    const yes = h("button", { class: "primary", disabled: busy || !!s.project || s.money < cost - share }, `Accept: you pay ${fmtMoney(cost - share)}`);
+  const terms = proposalTerms(s);
+  const proposal = s.proposal && terms ? (() => {
+    const o = s.proposal;
+    const id = o.facility;
+    const yes = h("button", { class: "primary", disabled: busy || !!s.project || s.money < terms.youPay }, terms.youPay ? `Accept: you pay ${fmtMoney(terms.youPay)}` : "Accept: no cost to you");
     yes.onclick = () => void guarded(async () => void (await persist(acceptProposal(s))));
     const no = h("button", { disabled: busy }, "No thanks");
     no.onclick = () => void guarded(async () => void (await persist(declineProposal(s))));
-    return card("The board's proposal", h("p", {}, `Upgrade the ${FACILITIES[id].name} to level ${levelOf(levels, id) + 1}. The board advances ${fmtMoney(share)} of the ${fmtMoney(cost)} cost and takes it back from this season's finances. The offer lapses after matchday ${PROPOSAL_LAPSE_MATCHDAY}, and it uses your one construction slot.`), h("div", { class: "toolbar" }, yes, no));
+    const what = `Upgrade the ${FACILITIES[id].name} to level ${levelOf(levels, id) + 1}. Cost ${fmtMoney(terms.cost)}.`;
+    const how = o.kind === "sponsor"
+      ? `${o.sponsor} pays ${fmtMoney(terms.sponsorPays)}${terms.youPay ? ` and you pay the other ${fmtMoney(terms.youPay)} from your budget` : ""}. In return you promise to stay at the club for ${terms.stay} season${terms.stay === 1 ? "" : "s"}, so no other club can approach you.`
+      : `The full cost comes out of your budget when you accept.`;
+    return card(o.kind === "sponsor" ? `Sponsor offer: ${o.sponsor}` : "The board's offer", h("p", {}, `${what} ${how}`), h("div", { class: "hint" }, `The offer lapses after matchday ${PROPOSAL_LAPSE_MATCHDAY} and uses your one construction slot.`), h("div", { class: "toolbar" }, yes, no));
   })() : null;
   return h("div", { class: "col" },
     ...(proposal ? [proposal] : []),

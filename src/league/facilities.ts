@@ -55,11 +55,31 @@ export const recoveryBonus = (levels?: FacilityLevels) => levelOf(levels, "medic
 /** Chance each offseason that the academy finds a genius: 10% per level. */
 export const geniusChance = (levels?: FacilityLevels) => levelOf(levels, "academy") * 0.1;
 
-/** The board's share of a project it proposes, and how long the offer stands (it lapses after this matchday). */
-export const BOARD_SHARE = 0.5;
+/** An offer to build a facility stands until this matchday, then lapses. */
 export const PROPOSAL_LAPSE_MATCHDAY = 6;
-/** Chance the board comes forward with a proposal in an offseason. */
+/** Chance an offer comes in an offseason. */
 export const PROPOSAL_CHANCE = 0.6;
+
+/**
+ * The forms an offer takes. All of them end the same way: a facility gets built and the club's budget pays all or
+ * part of the cost. A board offer is paid in full from the budget. A sponsor pays some or all of it, and in
+ * return you stay at the club for a number of seasons (no job offers). Level is the level being built, 1 to 3.
+ */
+export interface OfferForm {
+  id: "board" | "sponsor-full" | "sponsor-part";
+  /** How likely this form is, out of the total weight. */
+  weight: number;
+  /** Share of the cost the sponsor pays (0 for the board). */
+  sponsorShare: number;
+  /** Seasons you stay in return, by the level being built. */
+  stay: (level: number) => number;
+}
+export const OFFER_FORMS: OfferForm[] = [
+  { id: "board", weight: 4, sponsorShare: 0, stay: () => 0 },
+  { id: "sponsor-full", weight: 3, sponsorShare: 1, stay: (level) => level + 2 },
+  { id: "sponsor-part", weight: 3, sponsorShare: 0.5, stay: (level) => level },
+];
+export const SPONSORS = ["Sahel Mobile", "Harmattan Foods", "Delta Cement Works", "Lagoon Freight", "Ironbridge Steel", "Palm Coast Energy"];
 
 /** Potential added to every youth prospect at the club. */
 export const academyBonus = (levels?: FacilityLevels) => levelOf(levels, "academy") * 2;

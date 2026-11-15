@@ -9,7 +9,7 @@ import { computeStandings, standingsAt } from "./standings";
 import { defaultLeagueRecords, recordMatch, recordRetirement, recordSeasonEnd, type Legend, type LeagueRecords } from "./history";
 import { BONUS_FLAVOUR, MATCH_PAY, earnsSquadSlot, MAX_BUYS, MONEY_START, fmtMoney, goalBonus, goalResult, playerValue, prizeFor, sellPrice, teenSalePrice, wageOf } from "./economy";
 import { DEFAULT_START_YEAR } from "./calendar";
-import { BOARD_SHARE, FACILITIES, FACILITY_IDS, MAX_FACILITY_LEVEL, PROPOSAL_CHANCE, PROPOSAL_LAPSE_MATCHDAY, academyBonus, geniusChance, levelOf, projectDuration, recoveryBonus, reducedInjury, trainingSlots, upgradeCost, type FacilityId, type FacilityLevels } from "./facilities";
+import { FACILITIES, FACILITY_IDS, MAX_FACILITY_LEVEL, OFFER_FORMS, PROPOSAL_CHANCE, PROPOSAL_LAPSE_MATCHDAY, SPONSORS, academyBonus, geniusChance, levelOf, projectDuration, recoveryBonus, reducedInjury, trainingSlots, upgradeCost, type FacilityId, type FacilityLevels } from "./facilities";
 import { RESERVE_COUNT, makeGenius, evolvePlayers, playShare, generateTeams, makeReserves, initialPotential, makeProspects, objectiveTarget, overall, teamRating } from "./teams";
 
 export { describeLine, impact };
@@ -148,10 +148,21 @@ export interface SeasonState {
   facilities?: Record<string, FacilityLevels>;
   /** The construction under way at the club you manage. Only one at a time. It counts down by matchday. */
   project?: Project;
-  /** A project the board has proposed. It lapses after matchday PROPOSAL_LAPSE_MATCHDAY. */
-  proposal?: { facility: FacilityId };
-  /** What the board advanced towards a proposed project. It comes out of this season's finances. */
-  boardLoan?: number;
+  /** A facility offer on the table (from the board or a sponsor). It lapses after matchday PROPOSAL_LAPSE_MATCHDAY. */
+  proposal?: ProjectProposal;
+  /** A promise made to a sponsor: you stay at the club through this season, so no job offers arrive until then. */
+  commitment?: { sponsor: string; untilSeason: number };
+}
+
+/** An offer to build a facility. A board offer comes out of your budget; a sponsor pays part or all of it for a promise to stay. */
+export interface ProjectProposal {
+  facility: FacilityId;
+  kind: "board" | "sponsor";
+  sponsor?: string;
+  /** Share of the cost the sponsor pays: 0 for the board, up to 1. */
+  sponsorShare: number;
+  /** Seasons you promise to stay in return (0 for the board). */
+  stay: number;
 }
 
 /** A facility upgrade being built. The cost has been paid; the new level arrives when `remaining` reaches 0. */
@@ -231,39 +242,46 @@ export function teamById(s: SeasonState, id: string): Team {
 /** The facility levels at the club you manage. */
 export const facilitiesOf = (s: Pick<SeasonState, "facilities" | "managedId">): FacilityLevels => s.facilities?.[s.managedId] ?? {};
 
-/** Starts building the next level of a facility. It is paid for now and arrives after a number of matchdays. */
-export function startProject(prev: SeasonState, id: FacilityId, boardShare = 0): SeasonState {
+/** Starts building the next level of a facility. The cost leaves the budget now, less anything a sponsor pays. */
+export function startProject(prev: SeasonState, id: FacilityId, sponsor?: { name: string; pays: number }): SeasonState {
   if (prev.project) throw new Error("A project is already under construction.");
   const cost = upgradeCost(facilitiesOf(prev), id);
   if (cost === null) throw new Error(`The ${FACILITIES[id].name} is already fully upgraded.`);
-  const pay = cost - boardShare;
+  const pay = cost - (sponsor?.pays ?? 0);
   if (prev.money < pay) throw new Error(`You cannot afford this: it costs ${fmtMoney(pay)} and the balance is ${fmtMoney(prev.money)}.`);
   const state = structuredClone(prev);
   const level = levelOf(facilitiesOf(prev), id) + 1;
   const remaining = projectDuration(facilitiesOf(prev), id)!;
   state.money -= pay;
-  if (boardShare) state.boardLoan = (state.boardLoan ?? 0) + boardShare;
   state.project = { clubId: state.managedId, facility: id, remaining, level };
-  const text = boardShare
-    ? `Construction begins on the ${FACILITIES[id].name} (level ${level}). The board advances ${fmtMoney(boardShare)} and you pay ${fmtMoney(pay)}; the advance comes out of this season's finances. It will take ${remaining} matchdays.`
+  const text = sponsor
+    ? `Construction begins on the ${FACILITIES[id].name} (level ${level}). ${sponsor.name} pays ${fmtMoney(sponsor.pays)} of the ${fmtMoney(cost)} cost${pay ? ` and you pay ${fmtMoney(pay)}` : ""}. It will take ${remaining} matchdays.`
     : `Construction begins on the ${FACILITIES[id].name} (level ${level}) for ${fmtMoney(cost)}. It will take ${remaining} matchdays.`;
   state.news = [{ season: state.season, matchday: 0, text, link: "projects" as const }, ...state.news].slice(0, 14);
   return state;
 }
 
-/** What the board would advance towards the proposed project, or null when there is no proposal. */
-export function proposalShare(s: SeasonState): number | null {
+/** What an offer costs and asks, or null when there is no offer (or the facility is already fully upgraded). */
+export function proposalTerms(s: SeasonState): { cost: number; sponsorPays: number; youPay: number; stay: number } | null {
   if (!s.proposal) return null;
   const cost = upgradeCost(facilitiesOf(s), s.proposal.facility);
-  return cost === null ? null : Math.round((cost * BOARD_SHARE) / 10) * 10;
+  if (cost === null) return null;
+  const sponsorPays = Math.round((cost * s.proposal.sponsorShare) / 10) * 10;
+  return { cost, sponsorPays, youPay: cost - sponsorPays, stay: s.proposal.stay };
 }
 
-/** Take the board's proposal: the project starts now and the board advances part of the cost. */
+/** Take the offer: the project starts now. For a sponsor, you also promise to stay at the club. */
 export function acceptProposal(prev: SeasonState): SeasonState {
-  const share = proposalShare(prev);
-  if (!prev.proposal || share === null) throw new Error("The board has no proposal open.");
-  const state = startProject(prev, prev.proposal.facility, share);
+  const terms = proposalTerms(prev);
+  const offer = prev.proposal;
+  if (!offer || !terms) throw new Error("There is no offer open.");
+  const state = startProject(prev, offer.facility, offer.kind === "sponsor" ? { name: offer.sponsor!, pays: terms.sponsorPays } : undefined);
   delete state.proposal;
+  if (offer.kind === "sponsor") {
+    // The promise covers this many seasons, counting the one about to be played.
+    state.commitment = { sponsor: offer.sponsor!, untilSeason: Math.max(state.commitment?.untilSeason ?? 0, state.season + offer.stay - 1) };
+    state.news = [{ season: state.season, matchday: 0, text: `You have promised ${offer.sponsor} that you will stay at the club for ${offer.stay} season${offer.stay === 1 ? "" : "s"}, so no other club can approach you until then.` }, ...state.news].slice(0, 14);
+  }
   return state;
 }
 
@@ -273,7 +291,7 @@ export function declineProposal(prev: SeasonState): SeasonState {
   return state;
 }
 
-/** At the start of an offseason the board may propose upgrading the club's least developed facility. */
+/** At the start of an offseason an offer may arrive to upgrade the club's least developed facility, in one of a few forms. */
 function maybePropose(state: SeasonState): NewsItem | undefined {
   if (state.project) return undefined;
   const levels = facilitiesOf(state);
@@ -282,9 +300,15 @@ function maybePropose(state: SeasonState): NewsItem | undefined {
   if (!open.length || !rng.chance(PROPOSAL_CHANCE)) return undefined;
   const low = Math.min(...open.map((id) => levelOf(levels, id)));
   const id = rng.pick(open.filter((x) => levelOf(levels, x) === low));
-  state.proposal = { facility: id };
-  const share = proposalShare(state)!;
-  return { season: state.season, matchday: 0, text: `The board proposes upgrading the ${FACILITIES[id].name}: it will advance ${fmtMoney(share)} of the cost, paid back out of this season's finances. The offer stands until matchday ${PROPOSAL_LAPSE_MATCHDAY}.`, link: "projects" };
+  const form = rng.weighted(OFFER_FORMS, (f) => f.weight);
+  const level = levelOf(levels, id) + 1;
+  const sponsor = form.sponsorShare > 0 ? rng.pick(SPONSORS) : undefined;
+  state.proposal = { facility: id, kind: sponsor ? "sponsor" : "board", ...(sponsor ? { sponsor } : {}), sponsorShare: form.sponsorShare, stay: form.stay(level) };
+  const t = proposalTerms(state)!;
+  const text = sponsor
+    ? `${sponsor} offers to pay ${fmtMoney(t.sponsorPays)} towards the ${FACILITIES[id].name} if you promise to stay at the club for ${t.stay} season${t.stay === 1 ? "" : "s"}.`
+    : `The board proposes upgrading the ${FACILITIES[id].name} for ${fmtMoney(t.cost)}, paid from your budget.`;
+  return { season: state.season, matchday: 0, text: `${text} The offer stands until matchday ${PROPOSAL_LAPSE_MATCHDAY}.`, link: "projects" };
 }
 
 /** Adds the finished level to the club's facilities and clears the project. */
@@ -692,11 +716,6 @@ export function startNextSeason(prev: SeasonState): SeasonState {
   const wages = teamById(state, state.managedId).players.reduce((t, p) => t + wageOf(p), 0);
   state.money += prize - wages;
   news.push(`Season ${state.season} finances: ${ord(finish)} place prize money ${fmtMoney(prize)}, wage bill ${fmtMoney(-wages)}. Balance ${fmtMoney(state.money)}.`);
-  if (state.boardLoan) {
-    state.money -= state.boardLoan;
-    news.push(`The board takes back its ${fmtMoney(state.boardLoan)} project advance. Balance ${fmtMoney(state.money)}.`);
-    delete state.boardLoan;
-  }
   delete state.proposal;
   const result = goal.text ? goalResult(finish, goal.maxPos, clearOfSecond) : "missed";
   if (result !== "missed") {
@@ -738,7 +757,9 @@ export function startNextSeason(prev: SeasonState): SeasonState {
   state.intake = buildIntake(state, managedRetirees(state, retirees));
   const genius = state.intake.prospects.find((p) => p.genius);
   const proposed = maybePropose(state);
-  const offers = buildOffers(state);
+  // A promise to a sponsor keeps other clubs away until it runs out.
+  if (state.commitment && lastSeason > state.commitment.untilSeason) delete state.commitment;
+  const offers = state.commitment ? [] : buildOffers(state);
   if (offers.length) {
     state.offers = offers;
     state.lastOfferSeason = state.season - 1;
@@ -1037,7 +1058,6 @@ export function acceptOffer(prev: SeasonState, clubId: string): SeasonState {
   // A project in progress is finished for the club you leave: it is paid for and belongs to them.
   if (state.project) state.news = [finishProject(state, 0), ...state.news];
   delete state.proposal;
-  delete state.boardLoan;
   const club = teamById(state, clubId);
   state.managedId = clubId;
   state.tactic = club.style;

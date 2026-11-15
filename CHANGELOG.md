@@ -14,9 +14,11 @@ drift apart). It is shown in the app footer and on the new-game screen.
   Facilities belong to the club: if you move on, a project in progress is finished for the club you leave.
 - Genius discovery. A youth academy can turn up a genius in the offseason (10% a year per level): a teenager with a
   potential of 88 or more, marked GENIUS on your youth shortlist.
-- Board proposals. In the offseason the board may propose upgrading your least developed facility. It advances half
-  the cost, you pay the other half, and it takes its half back out of that season's finances. The offer lapses after
-  matchday 6 and uses your one construction slot.
+- Facility offers. In the offseason an offer to upgrade your least developed facility may arrive, in one of three
+  forms that all end the same way: a board offer (the whole cost comes out of your budget), a sponsor who pays all of
+  it, or a sponsor who pays half. A sponsor wants a promise in return: you stay at the club for a number of seasons
+  and no other club can approach you until then. The cost leaves your budget the moment you accept, and if you cannot
+  afford your part the offer cannot be taken. It lapses after matchday 6 and uses your one construction slot.
 - A calendar. Each season is a year (the header shows it), and an era will last ten seasons whatever your results.
   New games start in 2020 for now. Saves upgrade to version 10.
 

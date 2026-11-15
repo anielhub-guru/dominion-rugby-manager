@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_START_YEAR, ERA_LENGTH, eraIndex, seasonYear, seasonsToNextEra } from "../src/league/calendar";
 import { MAX_FACILITY_LEVEL, PROJECT_COST, PROJECT_MATCHDAYS, PROPOSAL_LAPSE_MATCHDAY, academyBonus, recoveryBonus, reducedInjury, trainingSlots, upgradeCost } from "../src/league/facilities";
-import { SAVE_VERSION, acceptProposal, autoPlan, completeOffseason, declineProposal, proposalShare, startProject, facilitiesOf, isSeasonOver, migrateSave, newGame, playMatchday, startNextSeason, afterMatch, type SeasonState } from "../src/league/season";
+import { SAVE_VERSION, acceptProposal, autoPlan, completeOffseason, declineProposal, proposalTerms, startProject, facilitiesOf, isSeasonOver, migrateSave, newGame, playMatchday, startNextSeason, afterMatch, type SeasonState } from "../src/league/season";
 
 function offseason(seed = 1): SeasonState {
   let s = newGame(seed, "ash");
@@ -134,38 +134,58 @@ describe("genius discovery", () => {
   }, 30000);
 });
 
-describe("the board's proposals", () => {
-  const withProposal = () => {
-    for (let seed = 1; seed <= 30; seed++) {
+describe("facility offers", () => {
+  const seen = (kind: "board" | "sponsor", part?: boolean) => {
+    for (let seed = 1; seed <= 60; seed++) {
       const s = startNextSeason(playSeason(newGame(seed, "ash")));
-      if (s.proposal) return { ...s, offers: undefined } as SeasonState;
+      const o = s.proposal;
+      if (o && o.kind === kind && (part === undefined || (o.sponsorShare < 1) === part)) return { ...s, offers: undefined } as SeasonState;
     }
-    throw new Error("no proposal in 30 seeds");
+    throw new Error(`no ${kind} offer in 60 seeds`);
   };
 
-  it("picks the least developed facility and advances half the cost", () => {
-    const s = withProposal();
-    expect(proposalShare(s)).toBe(PROJECT_COST[0] / 2);
-    expect(s.news.some((n) => n.link === "projects" && n.text.includes("The board proposes"))).toBe(true);
-  });
-
-  it("starts the project at half price and takes the advance back at season end", () => {
-    const s = withProposal();
+  it("a board offer costs the full price from the budget and asks for nothing", () => {
+    const s = seen("board");
+    const t = proposalTerms(s)!;
+    expect(t).toMatchObject({ cost: PROJECT_COST[0], sponsorPays: 0, youPay: PROJECT_COST[0], stay: 0 });
     const b = acceptProposal(s);
-    expect(b.money).toBe(s.money - PROJECT_COST[0] / 2);
-    expect(b.boardLoan).toBe(PROJECT_COST[0] / 2);
-    expect(b.proposal).toBeUndefined();
+    expect(b.money).toBe(s.money - PROJECT_COST[0]);
     expect(b.project?.facility).toBe(s.proposal!.facility);
-    const plain = { ...s, proposal: undefined } as SeasonState;
-    const next = (x: SeasonState) => startNextSeason(playSeason(completeOffseason(x, autoPlan(x))));
-    const after = next(b);
-    expect(after.boardLoan).toBeUndefined();
-    expect(after.news.some((n) => n.text.includes("takes back"))).toBe(true);
-    expect(next(plain).news.some((n) => n.text.includes("takes back"))).toBe(false);
+    expect(b.commitment).toBeUndefined();
+    expect(b.proposal).toBeUndefined();
   });
 
-  it("can be declined, and lapses after matchday six", () => {
-    const s = withProposal();
+  it("a sponsor pays, and in return you stay: no job offers until the promise runs out", () => {
+    const s = seen("sponsor", false);
+    const t = proposalTerms(s)!;
+    expect(t.sponsorPays).toBe(PROJECT_COST[0]);
+    expect(t.stay).toBe(3);
+    const b = acceptProposal(s);
+    expect(b.money).toBe(s.money);
+    expect(b.commitment).toMatchObject({ sponsor: s.proposal!.sponsor, untilSeason: s.season + 2 });
+    let x = completeOffseason(b, autoPlan(b));
+    for (let i = 0; i < 3; i++) {
+      x = startNextSeason(playSeason(x));
+      expect(x.offers).toBeUndefined();
+      x = completeOffseason(x, autoPlan(x));
+    }
+    expect(x.commitment).toBeDefined();
+    x = startNextSeason(playSeason(x));
+    expect(x.commitment).toBeUndefined();
+  });
+
+  it("a part-paying sponsor shares the cost and asks for a shorter promise", () => {
+    const s = seen("sponsor", true);
+    const t = proposalTerms(s)!;
+    expect(t.sponsorPays).toBe(PROJECT_COST[0] / 2);
+    expect(t.youPay).toBe(PROJECT_COST[0] / 2);
+    expect(t.stay).toBe(1);
+    expect(acceptProposal(s).money).toBe(s.money - PROJECT_COST[0] / 2);
+  });
+
+  it("cannot be taken if you cannot pay your part, can be declined, and lapses after matchday six", () => {
+    const s = seen("board");
+    expect(() => acceptProposal({ ...s, money: 10 })).toThrow(/cannot afford/);
     expect(declineProposal(s).proposal).toBeUndefined();
     let t = completeOffseason(s, autoPlan(s));
     for (let i = 0; i < PROPOSAL_LAPSE_MATCHDAY - 1; i++) t = playMatchday(t).state;
