@@ -228,3 +228,20 @@ The PolyForm licence above covers the source code. The art, cutaway images, comm
 ## Future targets
 
 Android and iOS are not enabled. `lib.rs` already has the `mobile_entry_point` attribute; add them later with `npm run tauri android init` / `ios init`. The UI would need touch-friendly sizing.
+
+### Parked idea: story cutaways and event moments
+
+Many more cutaway and event moments could be added around signings, retirements and club stories. They are parked, not planned. They add no real gameplay value, and each one needs its own artwork, so a large set would be costly and could get repetitive. This is a record of what is possible.
+
+- **Signings, by player type:**
+  - a genius player
+  - a player from a prestigious sporting background (for example, a famous family or academy)
+  - other variations driven by the player's personality
+- **Retirements and departures:**
+  - a retirement scene
+  - variations for how someone leaves the club
+  - a one-club career, with the player at the club all through their life
+  - a club legend's farewell
+- **Other club stories:** further moments in the same style, such as milestones and career stories.
+
+Revisit if there is artwork to support it, or if the moments can feed into gameplay.
