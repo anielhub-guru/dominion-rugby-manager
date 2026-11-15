@@ -1,6 +1,7 @@
 import { Narrator, type CardFacts, type Facts } from "./commentary";
 import type { RivalNotes } from "../league/rivals";
 import { Rng, hashSeed } from "./rng";
+import { WeatherTalk, weatherFor, type Weather } from "./weather";
 import { ROLES, emptyTotals } from "./types";
 import type { Attr, EventType, MatchEvent, MatchLog, Player, PlayerLine, Role, ShapeId, TacticId, Team, TeamStats } from "./types";
 
@@ -291,6 +292,9 @@ export type CardState = { kind: "bin"; minutesLeft: number } | { kind: "off" } |
 export class MatchSim {
   private rng: Rng;
   private narrator: Narrator;
+  /** Cosmetic only: drawn over the match and mentioned in the commentary, never read by the match itself. */
+  readonly weather: Weather;
+  private weatherTalk: WeatherTalk;
   readonly sides: [Side, Side];
   private events: MatchEvent[] = [];
   private cursor = 0;
@@ -315,6 +319,8 @@ export class MatchSim {
     this.rng = new Rng(input.seed);
     // Wording has its own random stream so changing the commentary never changes what happens.
     this.narrator = new Narrator(new Rng((input.seed ^ 0x9e3779b9) >>> 0));
+    this.weather = weatherFor(input.id);
+    this.weatherTalk = new WeatherTalk(this.weather, input.seed);
     this.him = input.home.gender === "women" ? "her" : "him";
     this.sides = [
       makeSide(input.home, input.homeTactic, input.homeShape ?? SHAPE_BY_STYLE[input.homeTactic], !!input.homeAuto, !!input.homeAiSubs),
@@ -439,6 +445,7 @@ export class MatchSim {
       stats: [h.stats, a.stats],
       players,
       load,
+      weather: this.weather,
     };
   }
 
@@ -471,6 +478,8 @@ export class MatchSim {
   }
 
   private emit(type: EventType, text: string, key: boolean, team?: 0 | 1, player?: string, x1?: number, info?: Info) {
+    const remark = this.weatherTalk.remark(type, player);
+    if (remark) text = `${text} ${remark}`;
     const offA = info?.hl && this.cA ? this.offSlots(this.cA) : [];
     const offD = info?.hl && this.cD ? this.offSlots(this.cD) : [];
     this.events.push({

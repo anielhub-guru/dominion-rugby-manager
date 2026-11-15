@@ -7,6 +7,8 @@ import { scorerLines, standoutLines, statBars } from "./text";
 import { teamColor } from "../league/teams";
 import { avatarBadge } from "./avatar";
 import { Cutaways } from "../cutaways";
+import { RainLayer } from "./rain";
+import { weatherLabel, type Weather } from "../engine/weather";
 import { describeLine, playerOfTheMatch, teamBest } from "../league/awards";
 
 /** Sets an element's text colour and returns it. */
@@ -71,6 +73,8 @@ export class LiveMatch {
   readonly root: HTMLElement;
   private arena: ArenaView;
   private cutaways: Cutaways;
+  private rain: RainLayer;
+  private weather: Weather | undefined;
   private opts: LiveOptions;
   private feed = h("div", { class: "feed" });
   private score = h("div", { class: "sb-score" }, "0 - 0");
@@ -121,6 +125,8 @@ export class LiveMatch {
   constructor(opts: LiveOptions) {
     this.opts = opts;
     this.arena = new ArenaView(opts.home.short, opts.away.short, teamColor(opts.home.id), teamColor(opts.away.id, "#f0b35a"));
+    this.weather = opts.sim ? opts.sim.weather : opts.log?.weather;
+    this.rain = new RainLayer(this.weather ?? { id: "clear", wind: 0 });
     this.cutaways = new Cutaways({ home: opts.home, away: opts.away, stage: this.stage, arena: this.arena.canvas, rate: () => (this.paused ? 0 : this.speed) });
     if (opts.log) {
       const byStep = new Map<number, MatchEvent[]>();
@@ -143,6 +149,7 @@ export class LiveMatch {
     window.clearInterval(this.ticker);
     this.cutaways.cancel();
     this.arena.dispose();
+    this.rain.dispose();
     this.wake?.();
   }
 
@@ -183,8 +190,8 @@ export class LiveMatch {
       h("div", { class: "sb-mid" }, this.score, this.clock, h("div", { class: "sb-bar" }, this.progress)),
       tint(h("div", { class: "sb-team away" }, away.name), teamColor(away.id, "#f0b35a")));
 
-    this.stage.append(this.arena.canvas, this.cutaways.layer, h("div", { class: "cm" }, this.cmTag, this.cmText));
-    this.cmTag.textContent = "MATCH CENTRE";
+    this.stage.append(this.arena.canvas, this.cutaways.layer, h("div", { class: "cm" }, this.cmTag, this.cmText), this.rain.canvas);
+    this.cmTag.textContent = this.weather && this.weather.id !== "clear" ? `MATCH CENTRE  ·  ${weatherLabel(this.weather).toUpperCase()}` : "MATCH CENTRE";
     this.cmText.textContent = `${home.name} v ${away.name}`;
 
     const ms = this.opts.managedSide;

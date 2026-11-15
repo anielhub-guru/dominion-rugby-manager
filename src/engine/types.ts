@@ -1,3 +1,4 @@
+import type { Weather } from "./weather";
 export type Role = "Anchor" | "Bruiser" | "Pivot" | "Winger" | "Sweeper";
 /** Starting-five slots, in lineup order. */
 export const ROLES: readonly Role[] = ["Anchor", "Bruiser", "Pivot", "Winger", "Sweeper"];
@@ -192,4 +193,6 @@ export interface MatchLog {
   players?: PlayerLine[];
   /** Share of the match each player was on the pitch (0 to 1), by player id. Missing on older logs. */
   load?: Record<string, number>;
+  /** The sky the match was played under (cosmetic). Missing on older logs, which count as clear. */
+  weather?: Weather;
 }

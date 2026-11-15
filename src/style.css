@@ -485,3 +485,7 @@ tr.insp { box-shadow: inset 3px 0 0 var(--acc); background: rgba(143, 227, 166, 
 .cmp-head .big { font-size: 22px; }
 .cmp select { max-width: 100%; margin-left: 6px; }
 .cmp .r-plot { width: min(100%, 400px); }
+
+/* Match weather (src/viewer/rain.ts): drawn over the arena and the cutaways, never catches the mouse. */
+.rain { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
+.rain[hidden] { display: none; }
