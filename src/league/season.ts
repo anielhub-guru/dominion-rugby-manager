@@ -9,6 +9,7 @@ import { computeStandings, standingsAt } from "./standings";
 import { defaultLeagueRecords, recordMatch, recordRetirement, recordSeasonEnd, type Legend, type LeagueRecords } from "./history";
 import { BONUS_FLAVOUR, MATCH_PAY, earnsSquadSlot, MAX_BUYS, MONEY_START, fmtMoney, goalBonus, goalResult, playerValue, prizeFor, sellPrice, teenSalePrice, wageOf } from "./economy";
 import { DEFAULT_START_YEAR } from "./calendar";
+import { MAX_SPONSOR_DEALS, SPONSOR_LAPSE_MATCHDAY, describeCondition, fanOffer, judgeFanDeal, judgeSeasonDeal, sponsorOffers, type Deal } from "./deals";
 import { FACILITIES, FACILITY_IDS, MAX_FACILITY_LEVEL, OFFER_FORMS, PROPOSAL_CHANCE, PROPOSAL_LAPSE_MATCHDAY, SPONSORS, academyBonus, geniusChance, levelOf, projectDuration, recoveryBonus, reducedInjury, trainingSlots, upgradeCost, type FacilityId, type FacilityLevels } from "./facilities";
 import { RESERVE_COUNT, makeGenius, evolvePlayers, playShare, generateTeams, makeReserves, initialPotential, makeProspects, objectiveTarget, overall, teamRating } from "./teams";
 
@@ -92,7 +93,7 @@ export interface NewsItem {
   /** Final league position, for kind "finish"/"title". */
   position?: number;
   /** Where the news points to, shown as a link to that tab. */
-  link?: "projects";
+  link?: "projects" | "deals";
 }
 
 /** Career totals include a count of seasons played. */
@@ -152,6 +153,10 @@ export interface SeasonState {
   proposal?: ProjectProposal;
   /** A promise made to a sponsor: you stay at the club through this season, so no job offers arrive until then. */
   commitment?: { sponsor: string; untilSeason: number };
+  /** Sponsor offers on the table and deals you have accepted (sponsors and fans). See deals.ts. */
+  deals?: Deal[];
+  /** The fan challenge you passed on, as "season:matchday", so it is not shown again. */
+  fanPassed?: string;
 }
 
 /** An offer to build a facility. A board offer comes out of your budget; a sponsor pays part or all of it for a promise to stay. */
@@ -228,7 +233,45 @@ export function newGame(seed: number, managedId: string, gender: Gender = "men",
     money: MONEY_START,
     records: defaultLeagueRecords(seed, gender),
     legends: {},
+    ...firstDeals(teams, seed, managedId),
   };
+}
+
+/** Sponsor offers for the first season of a new game. */
+function firstDeals(teams: Team[], seed: number, managedId: string): { deals?: Deal[] } {
+  const deals = sponsorOffers({ seed, season: 1, managedId, teams } as SeasonState);
+  return deals.length ? { deals } : {};
+}
+
+/** Accept a sponsor's offer. Up to MAX_SPONSOR_DEALS can run at once. */
+export function acceptDeal(prev: SeasonState, id: string): SeasonState {
+  const d = prev.deals?.find((x) => x.id === id && x.source === "sponsor" && x.status === "offered");
+  if (!d) throw new Error("That offer is no longer open.");
+  if (prev.deals!.filter((x) => x.source === "sponsor" && x.status === "active").length >= MAX_SPONSOR_DEALS) throw new Error(`You can have at most ${MAX_SPONSOR_DEALS} sponsor deals at once.`);
+  const state = structuredClone(prev);
+  state.deals!.find((x) => x.id === id)!.status = "active";
+  state.news = [{ season: state.season, matchday: state.matchday, text: `Deal agreed with ${d.from}: ${describeCondition(d.cond, state).toLowerCase()}. They pay ${fmtMoney(d.reward)}; if you miss it you pay ${fmtMoney(d.penalty)}. Settled at the end of the season.`, link: "deals" as const }, ...state.news].slice(0, 14);
+  return state;
+}
+
+export function declineDeal(prev: SeasonState, id: string): SeasonState {
+  const state = structuredClone(prev);
+  state.deals = (state.deals ?? []).filter((x) => x.id !== id);
+  return state;
+}
+
+/** Take the supporters' challenge for the next match. They pay out straight after it if you meet it. */
+export function acceptFanChallenge(prev: SeasonState): SeasonState {
+  const offer = fanOffer(prev);
+  if (!offer) throw new Error("The supporters have no challenge for this match.");
+  const state = structuredClone(prev);
+  state.deals = [...(state.deals ?? []), { ...offer, status: "active" }];
+  state.news = [{ season: state.season, matchday: state.matchday, text: `The supporters have a challenge for matchday ${state.matchday}: ${describeCondition(offer.cond, state).toLowerCase()}. ${fmtMoney(offer.reward)} if you do.`, link: "deals" as const }, ...state.news].slice(0, 14);
+  return state;
+}
+
+export function passFanChallenge(prev: SeasonState): SeasonState {
+  return { ...prev, fanPassed: `${prev.season}:${prev.matchday}` };
 }
 
 export const isSeasonOver = (s: SeasonState) => s.matchday > s.totalMatchdays;
@@ -440,6 +483,7 @@ export function playMatchday(prev: SeasonState, managedLog?: MatchLog): { state:
   if (md === state.totalMatchdays) items.unshift(finalPositionNews(state, ids, md));
   const built = tickProject(state, md);
   if (built) items.unshift(built);
+  items.unshift(...settleDeals(state, md, mine));
   if (state.proposal && md >= PROPOSAL_LAPSE_MATCHDAY) {
     delete state.proposal;
     items.unshift({ season: state.season, matchday: md, text: "The board's project proposal has lapsed." });
@@ -447,6 +491,27 @@ export function playMatchday(prev: SeasonState, managedLog?: MatchLog): { state:
   state.news = [...items, ...state.news].slice(0, 14);
   state.matchday++;
   return { state, logs };
+}
+
+/**
+ * Pays out the supporters' challenge for the match just played, and closes the sponsors' window to accept once
+ * the lapse matchday arrives. Returns the news for what happened.
+ */
+function settleDeals(state: SeasonState, md: number, mine?: MatchLog): NewsItem[] {
+  const out: NewsItem[] = [];
+  if (!state.deals) return out;
+  for (const d of state.deals.filter((x) => x.source === "fans" && x.matchday === md && x.status === "active")) {
+    const met = mine ? judgeFanDeal(d, state, mine) : false;
+    const what = describeCondition(d.cond, state).toLowerCase();
+    if (met) state.money += d.reward;
+    out.push({ season: state.season, matchday: md, text: met ? `The supporters are delighted: you met their challenge (${what}). They raise ${fmtMoney(d.reward)} for the club.` : `The supporters wanted you to ${what}, and are disappointed.`, link: "deals" });
+  }
+  state.deals = state.deals.filter((x) => !(x.source === "fans" && x.matchday === md));
+  if (md >= SPONSOR_LAPSE_MATCHDAY && state.deals.some((x) => x.source === "sponsor" && x.status === "offered")) {
+    state.deals = state.deals.filter((x) => !(x.source === "sponsor" && x.status === "offered"));
+    out.push({ season: state.season, matchday: md, text: "The sponsors' offers have lapsed.", link: "deals" });
+  }
+  return out;
 }
 
 /** The player's career: completed seasons plus the current one. */
@@ -701,6 +766,8 @@ export function startNextSeason(prev: SeasonState): SeasonState {
     for (const k of STAT_KEYS) career[k] += now[k];
     if (now.apps > 0) career.seasons++;
   }
+  // Sponsor deals are judged on the season just played, before its stats are cleared.
+  const dealResults = (state.deals ?? []).filter((d) => d.source === "sponsor" && d.status === "active").map((d) => ({ d, met: judgeSeasonDeal(d, state, finish), what: describeCondition(d.cond, state).toLowerCase() }));
   const played = state.seasonStats;
   const matches = state.totalMatchdays;
   state.seasonStats = {};
@@ -717,6 +784,13 @@ export function startNextSeason(prev: SeasonState): SeasonState {
   state.money += prize - wages;
   news.push(`Season ${state.season} finances: ${ord(finish)} place prize money ${fmtMoney(prize)}, wage bill ${fmtMoney(-wages)}. Balance ${fmtMoney(state.money)}.`);
   delete state.proposal;
+  const dealNews: NewsItem[] = [];
+  for (const { d, met, what } of dealResults) {
+    state.money += met ? d.reward : -d.penalty;
+    dealNews.push({ season: state.season, matchday: 0, text: met ? `${d.from} deal met (${what}): they pay ${fmtMoney(d.reward)}. Balance ${fmtMoney(state.money)}.` : `${d.from} deal missed (${what}): you pay ${fmtMoney(d.penalty)}. Balance ${fmtMoney(state.money)}.`, link: "deals" });
+  }
+  delete state.deals;
+  delete state.fanPassed;
   const result = goal.text ? goalResult(finish, goal.maxPos, clearOfSecond) : "missed";
   if (result !== "missed") {
     const bonus = goalBonus(result);
@@ -757,6 +831,8 @@ export function startNextSeason(prev: SeasonState): SeasonState {
   state.intake = buildIntake(state, managedRetirees(state, retirees));
   const genius = state.intake.prospects.find((p) => p.genius);
   const proposed = maybePropose(state);
+  const offered = sponsorOffers(state);
+  if (offered.length) state.deals = offered;
   // A promise to a sponsor keeps other clubs away until it runs out.
   if (state.commitment && lastSeason > state.commitment.untilSeason) delete state.commitment;
   const offers = state.commitment ? [] : buildOffers(state);
@@ -771,6 +847,8 @@ export function startNextSeason(prev: SeasonState): SeasonState {
   const extra: NewsItem[] = [];
   if (genius) extra.push({ season: state.season, matchday: 0, text: `The youth academy has found a genius: ${genius.name}, a ${genius.role} aged ${genius.age}, is on your youth shortlist.`, link: "projects" });
   if (proposed) extra.push(proposed);
+  if (offered.length) extra.push({ season: state.season, matchday: 0, text: offered.length > 1 ? `${offered.length} sponsors have made offers for the coming season. Accept before matchday ${SPONSOR_LAPSE_MATCHDAY}.` : `${offered[0].from} has made an offer for the coming season. Accept before matchday ${SPONSOR_LAPSE_MATCHDAY}.`, link: "deals" });
+  extra.push(...dealNews);
   state.news = [...extra, ...news.map((text) => ({ season: state.season, matchday: 0, text })), ...state.news].slice(0, 14);
   return state;
 }
@@ -1068,6 +1146,8 @@ export function acceptOffer(prev: SeasonState, clubId: string): SeasonState {
   state.trainGains = {};
   state.declinedTop = 0;
   delete state.offers;
+  state.deals = sponsorOffers(state);
+  delete state.fanPassed;
   state.intake = buildIntake(state, []);
   const text = `You leave ${old.name} and take over ${club.name}. Board mandate: ${offer.mandate.toLowerCase()}. Starting balance ${fmtMoney(offer.budget)}.`;
   state.news = [{ season: state.season, matchday: 0, text }, ...state.news].slice(0, 14);

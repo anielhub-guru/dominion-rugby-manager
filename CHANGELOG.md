@@ -19,6 +19,17 @@ drift apart). It is shown in the app footer and on the new-game screen.
   it, or a sponsor who pays half. A sponsor wants a promise in return: you stay at the club for a number of seasons
   and no other club can approach you until then. The cost leaves your budget the moment you accept, and if you cannot
   afford your part the offer cannot be taken. It lapses after matchday 6 and uses your one construction slot.
+- Deals, on their own tab (key 5; Table, Fixtures and History move along one). Money for meeting a target, in two
+  sizes that work the same way.
+  - Sponsor deals are season-long. Up to two sponsors make offers each offseason, to be accepted before matchday 3,
+    and two can run at once. Targets: play a named squad player in 7 matches, finish in the top N, win N matches, keep
+    the opposition scoreless N times, or lose no more than N. They are set from your squad's strength. A met deal
+    pays out and a missed one costs 30% of the reward, both in the end-of-season finances.
+  - Fan challenges are one match. Before some matches the supporters set a challenge: beat this club, beat your
+    rivals (a rival match nearly always gets one), win, do not lose, or play a named player. Take it or pass. They pay
+    straight after the match if you meet it, and nothing is lost if you do not.
+  News items about deals link to the tab, and the Overview shows the supporters' challenge and the deals running.
+  Taking another job drops your deals and brings the new club's own offers.
 - A calendar. Each season is a year (the header shows it), and an era will last ten seasons whatever your results.
   New games start in 2020 for now. Saves upgrade to version 10.
 

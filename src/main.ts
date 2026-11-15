@@ -7,6 +7,7 @@ import { ATTRS, ROLES, type Gender, type MatchLog, type Player, type ShapeId, ty
 import { SHAPES, TACTICS, adviseShape, attackFit, slotPlayer } from "./engine/match";
 import { seasonYear } from "./league/calendar";
 import { PROPOSAL_LAPSE_MATCHDAY } from "./league/facilities";
+import { MAX_SPONSOR_DEALS, SPONSOR_LAPSE_MATCHDAY, dealProgress, describeCondition, fanOffer } from "./league/deals";
 import { FACILITIES, FACILITY_IDS, trainingSlots, MAX_FACILITY_LEVEL, levelOf, projectDuration, upgradeCost } from "./league/facilities";
 import { MAX_BUYS, fmtMoney, sellPrice, teenSalePrice, wageOf } from "./league/economy";
 import {
@@ -36,6 +37,10 @@ import {
   declineOffers,
   facilitiesOf,
   startProject,
+  acceptDeal,
+  declineDeal,
+  acceptFanChallenge,
+  passFanChallenge,
   acceptProposal,
   declineProposal,
   proposalTerms,
@@ -55,15 +60,16 @@ import { championsCard, clubCard } from "./viewer/history";
 import { reviewSeason } from "./league/review";
 import { adviseRecruitment, type Part } from "./league/recruit";
 
-type Tab = "overview" | "squad" | "training" | "projects" | "table" | "fixtures" | "history";
+type Tab = "overview" | "squad" | "training" | "projects" | "deals" | "table" | "fixtures" | "history";
 const TABS: [Tab, string][] = [
   ["overview", "1 Overview"],
   ["squad", "2 Squad"],
   ["training", "3 Training"],
   ["projects", "4 Projects"],
-  ["table", "5 Table"],
-  ["fixtures", "6 Fixtures"],
-  ["history", "7 History"],
+  ["deals", "5 Deals"],
+  ["table", "6 Table"],
+  ["fixtures", "7 Fixtures"],
+  ["history", "8 History"],
 ];
 
 let state: SeasonState | null = null;
@@ -649,6 +655,7 @@ function offseasonView(s: SeasonState): HTMLElement {
         card("Your squad", squad),
         card("Youth shortlist", h("div", { class: "hint" }, "● marks a position that lost a player. Prospects start weaker than established players and grow, so a teenager is an investment."), youth),
         card("Transfer list", h("div", { class: "hint" }, `At most ${MAX_BUYS} signings per offseason. The selling club replaces the player with a youngster.`), market),
+        dealsSummary(s),
         projectsSummary(s)),
       h("div", { class: "col sticky" }, comparePanel, card("Club news", h("ul", { class: "news" }, ...s.news.slice(0, 5).map(newsItem))))));
 }
@@ -702,7 +709,7 @@ function newsItem(n: SeasonState["news"][number]) {
     return h("li", { class: "news-title" }, h("div", { class: "trophy" }, "🏆"), h("div", { class: "nt-body" }, h("div", { class: "nt-kicker" }, `SEASON ${n.season} · LEAGUE CHAMPIONS`), h("div", { class: "nt-text" }, n.text)));
   }
   if (n.kind === "finish") return h("li", { class: "news-finish" }, h("span", { class: "pos-badge" }, `${n.position}`), h("div", {}, stamp, n.text));
-  return h("li", {}, stamp, n.text, ...(n.link ? [" ", goTo("projects", "Club projects →")] : []));
+  return h("li", {}, stamp, n.text, ...(n.link ? [" ", goTo(n.link, n.link === "deals" ? "Deals →" : "Club projects →")] : []));
 }
 
 /** A link that jumps to another tab. */
@@ -734,6 +741,49 @@ function projectStatus(s: SeasonState): string {
 function projectsSummary(s: SeasonState): HTMLElement {
   const levels = facilitiesOf(s);
   return card("Club projects", h("div", {}, projectStatus(s)), ...(s.proposal ? [h("div", { class: "advice" }, s.proposal.kind === "sponsor" ? `${s.proposal.sponsor} has made an offer to help build the ${FACILITIES[s.proposal.facility].name}.` : `The board has proposed upgrading the ${FACILITIES[s.proposal.facility].name}.`)] : []), h("div", { class: "dim" }, FACILITY_IDS.map((id) => `${FACILITIES[id].name} ${levelOf(levels, id)}/${MAX_FACILITY_LEVEL}`).join(" · ")), h("div", { class: "toolbar" }, goTo("projects", "Open club projects →")));
+}
+
+/** The supporters' challenge for the next match, with buttons to take it or pass. Null when there is none. */
+function fanCard(s: SeasonState): HTMLElement | null {
+  const o = fanOffer(s);
+  if (!o) return null;
+  const yes = h("button", { class: "primary", disabled: busy }, "Take the challenge");
+  yes.onclick = () => void guarded(async () => void (await persist(acceptFanChallenge(s))));
+  const no = h("button", { disabled: busy }, "Pass");
+  no.onclick = () => void guarded(async () => void (await persist(passFanChallenge(s))));
+  return card("The supporters' challenge", h("p", {}, `${describeCondition(o.cond, s)}. If you do, the fans raise ${fmtMoney(o.reward)} straight after the match. If you do not, nothing is lost.`), h("div", { class: "toolbar" }, yes, no));
+}
+
+/** A short card for other screens: the supporters' challenge, how many deals are running, and a link to the Deals tab. */
+function dealsSummary(s: SeasonState): HTMLElement {
+  const deals = s.deals ?? [];
+  const active = deals.filter((d) => d.status === "active" && d.source === "sponsor").length;
+  const offered = deals.filter((d) => d.status === "offered").length;
+  const fan = fanCard(s);
+  return card("Deals", h("div", {}, `${active} sponsor deal${active === 1 ? "" : "s"} running${offered ? `, ${offered} offer${offered === 1 ? "" : "s"} waiting` : ""}.`), ...(fan ? [h("div", { class: "advice" }, "The supporters have set a challenge for the next match."), fan] : []), h("div", { class: "toolbar" }, goTo("deals", "Open deals →")));
+}
+
+/** Deals tab: the supporters' challenge, sponsors' offers, and the deals you have running with how they are going. */
+function dealsView(s: SeasonState): HTMLElement {
+  const deals = s.deals ?? [];
+  const fan = fanCard(s);
+  const offers = deals.filter((d) => d.source === "sponsor" && d.status === "offered").map((d) => {
+    const full = deals.filter((x) => x.source === "sponsor" && x.status === "active").length >= MAX_SPONSOR_DEALS;
+    const yes = h("button", { class: "primary", disabled: busy || full }, "Accept");
+    yes.onclick = () => void guarded(async () => void (await persist(acceptDeal(s, d.id))));
+    const no = h("button", { disabled: busy }, "No thanks");
+    no.onclick = () => void guarded(async () => void (await persist(declineDeal(s, d.id))));
+    return card(`Sponsor offer: ${d.from}`, h("p", {}, `${describeCondition(d.cond, s)}.`), h("div", { class: "dim" }, `They pay ${fmtMoney(d.reward)} if you do. If you miss it, you pay ${fmtMoney(d.penalty)}. Settled at the end of the season. Accept before matchday ${SPONSOR_LAPSE_MATCHDAY}.${full ? ` You already have ${MAX_SPONSOR_DEALS} deals running.` : ""}`), h("div", { class: "toolbar" }, yes, no));
+  });
+  const running = deals.filter((d) => d.status === "active").map((d) => {
+    const prog = d.source === "sponsor" ? dealProgress(d, s).text : `Judged after matchday ${d.matchday}`;
+    return h("div", { class: "project" }, h("div", {}, h("b", {}, d.from), h("div", {}, describeCondition(d.cond, s)), h("div", { class: "dim" }, prog)), h("span", { class: "dim" }, d.source === "sponsor" ? `+${fmtMoney(d.reward)} / -${fmtMoney(d.penalty)}` : `+${fmtMoney(d.reward)}`));
+  });
+  return h("div", { class: "col" },
+    ...(fan ? [fan] : []),
+    ...offers,
+    card("Running deals", ...(running.length ? running : [h("div", { class: "dim" }, "No deals running. Sponsors make offers in the offseason, and the supporters set challenges before some matches.")])),
+    card("Club news", h("ul", { class: "news" }, ...s.news.slice(0, 6).map(newsItem))));
 }
 
 /** Projects tab: the three facilities, what each level does, and the one construction that can run at a time. */
@@ -822,7 +872,7 @@ function overviewView(s: SeasonState): HTMLElement {
   if (!isSeasonOver(s) && !s.offers?.length && !s.intake) left.append(goalCard(s, table, pos));
   const review = isSeasonOver(s) && !s.offers?.length && !s.intake ? reviewSeason(s) : null;
   if (review) left.append(reviewCard(s, review));
-  left.append(projectsSummary(s));
+  left.append(dealsSummary(s), projectsSummary(s));
 
   const right = h("div", { class: "col" },
     card("League table", buildTable(s, { compact: true, onClub: (id) => (id === s.managedId ? undefined : scout(s, id)) })),
@@ -1253,6 +1303,7 @@ function render() {
   else if (tab === "squad") body.append(squadView(s));
   else if (tab === "training") body.append(trainingView(s));
   else if (tab === "projects") body.append(projectsView(s));
+  else if (tab === "deals") body.append(dealsView(s));
   else if (tab === "table") body.append(card("League table", buildTable(s, { onClub: (id) => (id === s.managedId ? undefined : scout(s, id)) }), h("div", { class: "hint" }, "▲▼ = places moved since the previous matchday. Win 4, draw 2, +1 for 3+ tries (TF), +1 for losing by 7 or fewer (BP). Click a club to scout it.")));
   else if (tab === "history") body.append(h("div", { class: "col" }, championsCard(s), clubCard(s, historyClub && s.records[historyClub] ? historyClub : s.managedId, (id) => { historyClub = id; render(); })));
   else body.append(fixturesView(s));
