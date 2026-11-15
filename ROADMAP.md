@@ -24,6 +24,15 @@ The theme is business management: every deal gives something and costs flexibili
   - Healthcare facility: boosts recovery.
   - Youth academy: raises the initial star ratings of youth intake, and could let you discover a genius.
 
+## Era starts
+
+Start a career in a different era with the same club, so the experience differs by start year. For example, a brand-new, low-funded club in 1958, the league's best club in 1980, or a fallen giant in 2020.
+
+- An era is a bundle of starting parameters over the same engine: funds, facilities, media visibility, and starting objectives.
+- Era history is fictional and small in scale. Real events can be used as background but aren't required.
+- Brief story moments between play, built around big dreams, breaking out and legacy.
+- Recurring characters across eras, for example a young team captain who later becomes a board member or a sponsor.
+
 ## Other ideas from earlier discussion
 
 - League history: champions by year, records, a hall of fame, retired legends.
