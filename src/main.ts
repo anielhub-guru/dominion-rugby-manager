@@ -751,7 +751,7 @@ function fanCard(s: SeasonState): HTMLElement | null {
   yes.onclick = () => void guarded(async () => void (await persist(acceptFanChallenge(s))));
   const no = h("button", { disabled: busy }, "Pass");
   no.onclick = () => void guarded(async () => void (await persist(passFanChallenge(s))));
-  return card("The supporters' challenge", h("p", {}, `${describeCondition(o.cond, s)}. If you do, the fans raise ${fmtMoney(o.reward)} straight after the match. If you do not, nothing is lost.`), h("div", { class: "toolbar" }, yes, no));
+  return card("The supporters' challenge", h("p", {}, `${describeCondition(o.cond, s)}. If you do, the fans raise ${fmtMoney(o.reward)} straight after the match.`), h("div", { class: "toolbar" }, yes, no));
 }
 
 /** A short card for other screens: the supporters' challenge, how many deals are running, and a link to the Deals tab. */
@@ -1272,7 +1272,7 @@ function render() {
   const nav = h("nav");
   for (const [id, label] of TABS) {
     const [num, ...name] = label.split(" ");
-    const waiting = id === "deals" ? (s.deals ?? []).filter((d) => d.status === "offered").length : 0;
+    const waiting = id === "deals" ? (s.deals ?? []).filter((d) => d.status === "offered").length + (fanOffer(s) ? 1 : 0) : 0;
     const b = h("button", { class: id === tab ? "active" : "" }, name.join(" "), ...(waiting ? [h("span", { class: "dot", title: `${waiting} deal offer${waiting === 1 ? "" : "s"} waiting` })] : []), h("kbd", {}, num));
     b.onclick = () => {
       tab = id;
