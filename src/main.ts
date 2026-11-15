@@ -6,7 +6,8 @@ import { lookOf } from "./league/look";
 import { ATTRS, ROLES, type Gender, type MatchLog, type Player, type ShapeId, type TacticId, type Team } from "./engine/types";
 import { SHAPES, TACTICS, adviseShape, attackFit, slotPlayer } from "./engine/match";
 import { seasonYear } from "./league/calendar";
-import { FACILITIES, FACILITY_IDS, MAX_FACILITY_LEVEL, levelOf, upgradeCost } from "./league/facilities";
+import { PROPOSAL_LAPSE_MATCHDAY } from "./league/facilities";
+import { FACILITIES, FACILITY_IDS, trainingSlots, MAX_FACILITY_LEVEL, levelOf, projectDuration, upgradeCost } from "./league/facilities";
 import { MAX_BUYS, fmtMoney, sellPrice, teenSalePrice, wageOf } from "./league/economy";
 import {
   TRAINING,
@@ -34,6 +35,10 @@ import {
   lastFinishHere,
   declineOffers,
   facilitiesOf,
+  startProject,
+  acceptProposal,
+  declineProposal,
+  proposalShare,
   type ClubOffer,
   type OffseasonPlan,
   SQUAD_SIZE,
@@ -50,14 +55,15 @@ import { championsCard, clubCard } from "./viewer/history";
 import { reviewSeason } from "./league/review";
 import { adviseRecruitment, type Part } from "./league/recruit";
 
-type Tab = "overview" | "squad" | "training" | "table" | "fixtures" | "history";
+type Tab = "overview" | "squad" | "training" | "projects" | "table" | "fixtures" | "history";
 const TABS: [Tab, string][] = [
   ["overview", "1 Overview"],
   ["squad", "2 Squad"],
   ["training", "3 Training"],
-  ["table", "4 Table"],
-  ["fixtures", "5 Fixtures"],
-  ["history", "6 History"],
+  ["projects", "4 Projects"],
+  ["table", "5 Table"],
+  ["fixtures", "6 Fixtures"],
+  ["history", "7 History"],
 ];
 
 let state: SeasonState | null = null;
@@ -527,7 +533,7 @@ function offseasonView(s: SeasonState): HTMLElement {
   for (const p of intake.prospects) {
     yb.append(
       h("tr", { class: `${plan.sign.includes(p.id) ? "sel" : ""} ${p.id === focus?.id ? "insp" : ""}` },
-        nameCell(p, vacated.has(p.role) ? h("span", { class: "oop", title: "Fills a retirement" }, " ●") : null),
+        nameCell(p, vacated.has(p.role) ? h("span", { class: "oop", title: "Fills a retirement" }, " ●") : p.genius ? h("span", { class: "card-chip y", title: "Found by your youth academy: a once-in-a-generation talent" }, "GENIUS") : null),
         h("td", {}, p.role), h("td", {}, String(p.age)), h("td", { class: "stars" }, stars(p.scouted ?? 0)), ...attrCells(p),
         h("td", { class: "pts" }, String(overall(p))), h("td", {}, fmtMoney(teenSalePrice(p))),
         h("td", {}, actionFor(p))),
@@ -628,15 +634,7 @@ function offseasonView(s: SeasonState): HTMLElement {
   };
   const money = (label: string, v: number, sign = "") => h("span", { class: "dim" }, `${label} ${sign}${fmtMoney(v)}   `);
   const summary = h("div", { class: "advice" },
-    h("b", {}, `Squad ${check.size}/${check.capacity}   `), money("Balance now", s.money), money("Unpicked prospects sold", check.teenIncome, "+"), money("Sales", check.sellIncome, "+"), money("Purchases", check.buyCost, "-"), ...(check.buildCost ? [money("Project", check.buildCost, "-")] : []), h("b", {}, `Balance after ${fmtMoney(check.moneyAfter)}`));
-  const levels = facilitiesOf(s);
-  const projects = FACILITY_IDS.map((id) => {
-    const lv = levelOf(levels, id);
-    const cost = upgradeCost(levels, id);
-    const on = plan.build === id;
-    const btn = act(cost === null ? "Fully upgraded" : on ? `Building (${fmtMoney(cost)})` : `Upgrade for ${fmtMoney(cost)}`, on, () => (plan = { ...plan, build: on ? undefined : id }), cost === null || (!on && !!plan.build));
-    return h("div", { class: "project" }, h("div", {}, h("b", {}, FACILITIES[id].name), h("span", { class: "dim" }, `  level ${lv} of ${MAX_FACILITY_LEVEL}`), h("div", { class: "dim" }, FACILITIES[id].effect)), btn);
-  });
+    h("b", {}, `Squad ${check.size}/${check.capacity}   `), money("Balance now", s.money), money("Unpicked prospects sold", check.teenIncome, "+"), money("Sales", check.sellIncome, "+"), money("Purchases", check.buyCost, "-"), h("b", {}, `Balance after ${fmtMoney(check.moneyAfter)}`));
   const top = card(`Season ${s.season} (${seasonYear(s.startYear, s.season)}): offseason`,
     h("p", { class: "dim" }, check.capacity > SQUAD_SIZE ? `Get the squad to between ${SQUAD_SIZE} and ${check.capacity} before the season starts. Your earned extra place${check.capacity - SQUAD_SIZE === 1 ? "" : "s"} can stay empty, but a bigger squad costs more in wages and gives you cover for injuries and bans. Prospects you do not sign are sold.` : "Get the squad back to ten before the season starts. Prospects you do not sign are sold."),
     summary,
@@ -651,7 +649,7 @@ function offseasonView(s: SeasonState): HTMLElement {
         card("Your squad", squad),
         card("Youth shortlist", h("div", { class: "hint" }, "● marks a position that lost a player. Prospects start weaker than established players and grow, so a teenager is an investment."), youth),
         card("Transfer list", h("div", { class: "hint" }, `At most ${MAX_BUYS} signings per offseason. The selling club replaces the player with a youngster.`), market),
-        card("Club projects", h("div", { class: "hint" }, "One upgrade per offseason, paid from your balance, so it competes with signings. Each level is a flat step up."), ...projects)),
+        projectsSummary(s)),
       h("div", { class: "col sticky" }, comparePanel, card("Club news", h("ul", { class: "news" }, ...s.news.slice(0, 5).map(newsItem))))));
 }
 
@@ -704,7 +702,61 @@ function newsItem(n: SeasonState["news"][number]) {
     return h("li", { class: "news-title" }, h("div", { class: "trophy" }, "🏆"), h("div", { class: "nt-body" }, h("div", { class: "nt-kicker" }, `SEASON ${n.season} · LEAGUE CHAMPIONS`), h("div", { class: "nt-text" }, n.text)));
   }
   if (n.kind === "finish") return h("li", { class: "news-finish" }, h("span", { class: "pos-badge" }, `${n.position}`), h("div", {}, stamp, n.text));
-  return h("li", {}, stamp, n.text);
+  return h("li", {}, stamp, n.text, ...(n.link ? [" ", goTo("projects", "Club projects →")] : []));
+}
+
+/** A link that jumps to another tab. */
+function goTo(to: Tab, label: string): HTMLElement {
+  const a = h("a", { class: "golink", href: "#", title: "Open this tab" }, label);
+  a.onclick = (e) => {
+    e.preventDefault();
+    tab = to;
+    selectedPlayer = null;
+    render();
+  };
+  return a;
+}
+
+/** Where a project stands: what is being built and how many matchdays are left, or that the builders are free. */
+function projectStatus(s: SeasonState): string {
+  const p = s.project;
+  if (!p) return "No construction under way.";
+  return `Building: ${FACILITIES[p.facility].name}, level ${p.level}. ${p.remaining} matchday${p.remaining === 1 ? "" : "s"} to go.`;
+}
+
+/** A short card for other screens: the construction status and a link to the Projects tab. */
+function projectsSummary(s: SeasonState): HTMLElement {
+  const levels = facilitiesOf(s);
+  return card("Club projects", h("div", {}, projectStatus(s)), ...(s.proposal ? [h("div", { class: "advice" }, `The board has proposed upgrading the ${FACILITIES[s.proposal.facility].name}.`)] : []), h("div", { class: "dim" }, FACILITY_IDS.map((id) => `${FACILITIES[id].name} ${levelOf(levels, id)}/${MAX_FACILITY_LEVEL}`).join(" · ")), h("div", { class: "toolbar" }, goTo("projects", "Open club projects →")));
+}
+
+/** Projects tab: the three facilities, what each level does, and the one construction that can run at a time. */
+function projectsView(s: SeasonState): HTMLElement {
+  const levels = facilitiesOf(s);
+  const rows = FACILITY_IDS.map((id) => {
+    const lv = levelOf(levels, id);
+    const cost = upgradeCost(levels, id);
+    const days = projectDuration(levels, id);
+    const building = s.project?.facility === id;
+    const label = cost === null ? "Fully upgraded" : building ? `Building (${s.project!.remaining} to go)` : `Build level ${lv + 1}: ${fmtMoney(cost)}, ${days} matchdays`;
+    const btn = h("button", { class: building ? "primary" : "", disabled: busy || cost === null || !!s.project || s.money < cost }, label);
+    btn.onclick = () => void guarded(async () => void (await persist(startProject(s, id))));
+    return h("div", { class: "project" }, h("div", {}, h("b", {}, FACILITIES[id].name), h("span", { class: "dim" }, `  level ${lv} of ${MAX_FACILITY_LEVEL}`), h("div", { class: "dim" }, FACILITIES[id].effect)), btn);
+  });
+  const share = proposalShare(s);
+  const proposal = s.proposal && share !== null ? (() => {
+    const id = s.proposal.facility;
+    const cost = upgradeCost(levels, id)!;
+    const yes = h("button", { class: "primary", disabled: busy || !!s.project || s.money < cost - share }, `Accept: you pay ${fmtMoney(cost - share)}`);
+    yes.onclick = () => void guarded(async () => void (await persist(acceptProposal(s))));
+    const no = h("button", { disabled: busy }, "No thanks");
+    no.onclick = () => void guarded(async () => void (await persist(declineProposal(s))));
+    return card("The board's proposal", h("p", {}, `Upgrade the ${FACILITIES[id].name} to level ${levelOf(levels, id) + 1}. The board advances ${fmtMoney(share)} of the ${fmtMoney(cost)} cost and takes it back from this season's finances. The offer lapses after matchday ${PROPOSAL_LAPSE_MATCHDAY}, and it uses your one construction slot.`), h("div", { class: "toolbar" }, yes, no));
+  })() : null;
+  return h("div", { class: "col" },
+    ...(proposal ? [proposal] : []),
+    card("Club projects", h("div", {}, projectStatus(s)), h("div", { class: "hint" }, "Pay now, build over matchdays. One project at a time, and time only passes when matches are played. The facility belongs to the club."), ...rows),
+    card("Club news", h("ul", { class: "news" }, ...s.news.slice(0, 6).map(newsItem))));
 }
 
 function overviewView(s: SeasonState): HTMLElement {
@@ -760,6 +812,7 @@ function overviewView(s: SeasonState): HTMLElement {
   if (!isSeasonOver(s) && !s.offers?.length && !s.intake) left.append(goalCard(s, table, pos));
   const review = isSeasonOver(s) && !s.offers?.length && !s.intake ? reviewSeason(s) : null;
   if (review) left.append(reviewCard(s, review));
+  left.append(projectsSummary(s));
 
   const right = h("div", { class: "col" },
     card("League table", buildTable(s, { compact: true, onClub: (id) => (id === s.managedId ? undefined : scout(s, id)) })),
@@ -1038,7 +1091,7 @@ function trainingView(s: SeasonState): HTMLElement {
   }
   t.append(body);
   return h("div", { class: "col" },
-    card("Training focus", h("div", { class: "hint" }, "After each matchday three players get a chance to improve in this area."), focus),
+    card("Training focus", h("div", { class: "hint" }, `After each matchday ${trainingSlots(facilitiesOf(s))} players get a chance to improve in this area. A Training ground adds one more per level.`), h("div", {}, goTo("projects", "Club projects →")), focus),
     card(`Player progress, season ${s.season}`, h("div", { class: "hint" }, "Gains from training since the season began, best first. Ratings also shift between seasons as players age, and young players grow faster the more matches they play. A player at their potential stops improving."), t),
   );
 }
@@ -1189,6 +1242,7 @@ function render() {
   if (tab === "overview") body.append(overviewView(s));
   else if (tab === "squad") body.append(squadView(s));
   else if (tab === "training") body.append(trainingView(s));
+  else if (tab === "projects") body.append(projectsView(s));
   else if (tab === "table") body.append(card("League table", buildTable(s, { onClub: (id) => (id === s.managedId ? undefined : scout(s, id)) }), h("div", { class: "hint" }, "▲▼ = places moved since the previous matchday. Win 4, draw 2, +1 for 3+ tries (TF), +1 for losing by 7 or fewer (BP). Click a club to scout it.")));
   else if (tab === "history") body.append(h("div", { class: "col" }, championsCard(s), clubCard(s, historyClub && s.records[historyClub] ? historyClub : s.managedId, (id) => { historyClub = id; render(); })));
   else body.append(fixturesView(s));

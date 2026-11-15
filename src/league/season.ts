@@ -9,8 +9,8 @@ import { computeStandings, standingsAt } from "./standings";
 import { defaultLeagueRecords, recordMatch, recordRetirement, recordSeasonEnd, type Legend, type LeagueRecords } from "./history";
 import { BONUS_FLAVOUR, MATCH_PAY, earnsSquadSlot, MAX_BUYS, MONEY_START, fmtMoney, goalBonus, goalResult, playerValue, prizeFor, sellPrice, teenSalePrice, wageOf } from "./economy";
 import { DEFAULT_START_YEAR } from "./calendar";
-import { FACILITIES, MAX_FACILITY_LEVEL, academyBonus, levelOf, recoveryBonus, reducedInjury, trainingSlots, upgradeCost, type FacilityId, type FacilityLevels } from "./facilities";
-import { RESERVE_COUNT, evolvePlayers, playShare, generateTeams, makeReserves, initialPotential, makeProspects, objectiveTarget, overall, teamRating } from "./teams";
+import { BOARD_SHARE, FACILITIES, FACILITY_IDS, MAX_FACILITY_LEVEL, PROPOSAL_CHANCE, PROPOSAL_LAPSE_MATCHDAY, academyBonus, geniusChance, levelOf, projectDuration, recoveryBonus, reducedInjury, trainingSlots, upgradeCost, type FacilityId, type FacilityLevels } from "./facilities";
+import { RESERVE_COUNT, makeGenius, evolvePlayers, playShare, generateTeams, makeReserves, initialPotential, makeProspects, objectiveTarget, overall, teamRating } from "./teams";
 
 export { describeLine, impact };
 
@@ -54,8 +54,6 @@ export interface OffseasonPlan {
   sell: string[];
   sign: string[];
   buy: string[];
-  /** A facility to upgrade one level this offseason. At most one project a year. */
-  build?: FacilityId;
 }
 
 export interface SeasonRecord {
@@ -93,6 +91,8 @@ export interface NewsItem {
   kind?: "title" | "finish";
   /** Final league position, for kind "finish"/"title". */
   position?: number;
+  /** Where the news points to, shown as a link to that tab. */
+  link?: "projects";
 }
 
 /** Career totals include a count of seasons played. */
@@ -146,6 +146,22 @@ export interface SeasonState {
   startYear: number;
   /** Facility levels by club id. A club with no entry is at the starter level for everything. */
   facilities?: Record<string, FacilityLevels>;
+  /** The construction under way at the club you manage. Only one at a time. It counts down by matchday. */
+  project?: Project;
+  /** A project the board has proposed. It lapses after matchday PROPOSAL_LAPSE_MATCHDAY. */
+  proposal?: { facility: FacilityId };
+  /** What the board advanced towards a proposed project. It comes out of this season's finances. */
+  boardLoan?: number;
+}
+
+/** A facility upgrade being built. The cost has been paid; the new level arrives when `remaining` reaches 0. */
+export interface Project {
+  clubId: string;
+  facility: FacilityId;
+  /** Matchdays left. Time only passes when matches are played, so the offseason never ticks it. */
+  remaining: number;
+  /** The level it will reach. */
+  level: number;
 }
 
 /** Upgrades a saved season from an older version, or returns null if it cannot be upgraded. */
@@ -214,6 +230,78 @@ export function teamById(s: SeasonState, id: string): Team {
 
 /** The facility levels at the club you manage. */
 export const facilitiesOf = (s: Pick<SeasonState, "facilities" | "managedId">): FacilityLevels => s.facilities?.[s.managedId] ?? {};
+
+/** Starts building the next level of a facility. It is paid for now and arrives after a number of matchdays. */
+export function startProject(prev: SeasonState, id: FacilityId, boardShare = 0): SeasonState {
+  if (prev.project) throw new Error("A project is already under construction.");
+  const cost = upgradeCost(facilitiesOf(prev), id);
+  if (cost === null) throw new Error(`The ${FACILITIES[id].name} is already fully upgraded.`);
+  const pay = cost - boardShare;
+  if (prev.money < pay) throw new Error(`You cannot afford this: it costs ${fmtMoney(pay)} and the balance is ${fmtMoney(prev.money)}.`);
+  const state = structuredClone(prev);
+  const level = levelOf(facilitiesOf(prev), id) + 1;
+  const remaining = projectDuration(facilitiesOf(prev), id)!;
+  state.money -= pay;
+  if (boardShare) state.boardLoan = (state.boardLoan ?? 0) + boardShare;
+  state.project = { clubId: state.managedId, facility: id, remaining, level };
+  const text = boardShare
+    ? `Construction begins on the ${FACILITIES[id].name} (level ${level}). The board advances ${fmtMoney(boardShare)} and you pay ${fmtMoney(pay)}; the advance comes out of this season's finances. It will take ${remaining} matchdays.`
+    : `Construction begins on the ${FACILITIES[id].name} (level ${level}) for ${fmtMoney(cost)}. It will take ${remaining} matchdays.`;
+  state.news = [{ season: state.season, matchday: 0, text, link: "projects" as const }, ...state.news].slice(0, 14);
+  return state;
+}
+
+/** What the board would advance towards the proposed project, or null when there is no proposal. */
+export function proposalShare(s: SeasonState): number | null {
+  if (!s.proposal) return null;
+  const cost = upgradeCost(facilitiesOf(s), s.proposal.facility);
+  return cost === null ? null : Math.round((cost * BOARD_SHARE) / 10) * 10;
+}
+
+/** Take the board's proposal: the project starts now and the board advances part of the cost. */
+export function acceptProposal(prev: SeasonState): SeasonState {
+  const share = proposalShare(prev);
+  if (!prev.proposal || share === null) throw new Error("The board has no proposal open.");
+  const state = startProject(prev, prev.proposal.facility, share);
+  delete state.proposal;
+  return state;
+}
+
+export function declineProposal(prev: SeasonState): SeasonState {
+  const state = structuredClone(prev);
+  delete state.proposal;
+  return state;
+}
+
+/** At the start of an offseason the board may propose upgrading the club's least developed facility. */
+function maybePropose(state: SeasonState): NewsItem | undefined {
+  if (state.project) return undefined;
+  const levels = facilitiesOf(state);
+  const open = FACILITY_IDS.filter((id) => levelOf(levels, id) < MAX_FACILITY_LEVEL);
+  const rng = new Rng(hashSeed(state.seed, state.season, "proposal"));
+  if (!open.length || !rng.chance(PROPOSAL_CHANCE)) return undefined;
+  const low = Math.min(...open.map((id) => levelOf(levels, id)));
+  const id = rng.pick(open.filter((x) => levelOf(levels, x) === low));
+  state.proposal = { facility: id };
+  const share = proposalShare(state)!;
+  return { season: state.season, matchday: 0, text: `The board proposes upgrading the ${FACILITIES[id].name}: it will advance ${fmtMoney(share)} of the cost, paid back out of this season's finances. The offer stands until matchday ${PROPOSAL_LAPSE_MATCHDAY}.`, link: "projects" };
+}
+
+/** Adds the finished level to the club's facilities and clears the project. */
+function finishProject(state: SeasonState, matchday: number): NewsItem {
+  const p = state.project!;
+  const mine = ((state.facilities ??= {})[p.clubId] ??= {});
+  mine[p.facility] = p.level;
+  delete state.project;
+  return { season: state.season, matchday, text: `Project complete: the ${FACILITIES[p.facility].name} reaches level ${p.level} of ${MAX_FACILITY_LEVEL}. ${FACILITIES[p.facility].effect}`, link: "projects" };
+}
+
+/** One matchday of construction. Returns the news item when it finishes. */
+function tickProject(state: SeasonState, matchday: number): NewsItem | undefined {
+  if (!state.project) return undefined;
+  state.project.remaining--;
+  return state.project.remaining <= 0 ? finishProject(state, matchday) : undefined;
+}
 
 export function managedFixture(s: SeasonState): Fixture | undefined {
   return s.fixtures.find((f) => f.matchday === s.matchday && (f.homeId === s.managedId || f.awayId === s.managedId));
@@ -326,6 +414,12 @@ export function playMatchday(prev: SeasonState, managedLog?: MatchLog): { state:
   news.push(...train(state, md));
   const items: NewsItem[] = news.map((text) => ({ season: state.season, matchday: md, text }));
   if (md === state.totalMatchdays) items.unshift(finalPositionNews(state, ids, md));
+  const built = tickProject(state, md);
+  if (built) items.unshift(built);
+  if (state.proposal && md >= PROPOSAL_LAPSE_MATCHDAY) {
+    delete state.proposal;
+    items.unshift({ season: state.season, matchday: md, text: "The board's project proposal has lapsed." });
+  }
   state.news = [...items, ...state.news].slice(0, 14);
   state.matchday++;
   return { state, logs };
@@ -598,6 +692,12 @@ export function startNextSeason(prev: SeasonState): SeasonState {
   const wages = teamById(state, state.managedId).players.reduce((t, p) => t + wageOf(p), 0);
   state.money += prize - wages;
   news.push(`Season ${state.season} finances: ${ord(finish)} place prize money ${fmtMoney(prize)}, wage bill ${fmtMoney(-wages)}. Balance ${fmtMoney(state.money)}.`);
+  if (state.boardLoan) {
+    state.money -= state.boardLoan;
+    news.push(`The board takes back its ${fmtMoney(state.boardLoan)} project advance. Balance ${fmtMoney(state.money)}.`);
+    delete state.boardLoan;
+  }
+  delete state.proposal;
   const result = goal.text ? goalResult(finish, goal.maxPos, clearOfSecond) : "missed";
   if (result !== "missed") {
     const bonus = goalBonus(result);
@@ -636,6 +736,8 @@ export function startNextSeason(prev: SeasonState): SeasonState {
     }
   }
   state.intake = buildIntake(state, managedRetirees(state, retirees));
+  const genius = state.intake.prospects.find((p) => p.genius);
+  const proposed = maybePropose(state);
   const offers = buildOffers(state);
   if (offers.length) {
     state.offers = offers;
@@ -645,7 +747,10 @@ export function startNextSeason(prev: SeasonState): SeasonState {
   state.fixtures = buildSchedule(ids, state.season);
   state.matchday = 1;
   news.push("The offseason is open: fill your squad, and look at the youth shortlist and the transfer list. The season starts when you confirm.");
-  state.news = [...news.map((text) => ({ season: state.season, matchday: 0, text })), ...state.news].slice(0, 14);
+  const extra: NewsItem[] = [];
+  if (genius) extra.push({ season: state.season, matchday: 0, text: `The youth academy has found a genius: ${genius.name}, a ${genius.role} aged ${genius.age}, is on your youth shortlist.`, link: "projects" });
+  if (proposed) extra.push(proposed);
+  state.news = [...extra, ...news.map((text) => ({ season: state.season, matchday: 0, text })), ...state.news].slice(0, 14);
   return state;
 }
 
@@ -656,6 +761,14 @@ function buildIntake(state: SeasonState, retiring: string[]): Intake {
   const team = teamById(state, state.managedId);
   const vacated = new Set(retiring.map((id) => team.players.find((p) => p.id === id)!.role));
   const prospects = ROLES.flatMap((role) => makeProspects(team, `${state.season}.${role}`, role, state.seed, vacated.has(role) ? 3 : 1, academyBonus(facilitiesOf(state))));
+  // A good academy now and then turns up a genius, who takes the place of one prospect (a vacancy's if there is one).
+  const gr = new Rng(hashSeed(state.seed, state.season, "genius"));
+  if (gr.chance(geniusChance(facilitiesOf(state)))) {
+    const roles = vacated.size ? ROLES.filter((r) => vacated.has(r)) : ROLES;
+    const role = gr.pick(roles);
+    const at = prospects.findIndex((p) => p.role === role);
+    prospects[at] = makeGenius(team, `${state.season}.${role}`, role, state.seed);
+  }
 
   // Each AI club lists one player. Veterans and bench players are far likelier than stars,
   // and the asking price is off the player's true value by a club's own guess, up or down.
@@ -694,8 +807,6 @@ export interface PlanCheck {
   sellIncome: number;
   teenIncome: number;
   buyCost: number;
-  /** What the facility project costs (0 when none is chosen). */
-  buildCost: number;
   moneyAfter: number;
   /** The squad as it would be after the plan. */
   roster: Player[];
@@ -723,13 +834,10 @@ export function checkPlan(s: SeasonState, plan: OffseasonPlan): PlanCheck {
   const unsigned = intake.prospects.filter((p) => !plan.sign.includes(p.id));
   const teenIncome = unsigned.reduce((t, p) => t + teenSalePrice(p), 0);
   const buyCost = bought.reduce((t, l) => t + (l?.price ?? 0), 0);
-  const buildCost = plan.build ? (upgradeCost(facilitiesOf(s), plan.build) ?? 0) : 0;
-  if (plan.build && !FACILITIES[plan.build]) problems.push("That is not a facility you can build.");
-  else if (plan.build && upgradeCost(facilitiesOf(s), plan.build) === null) problems.push(`The ${FACILITIES[plan.build].name} is already fully upgraded.`);
-  const moneyAfter = s.money + sellIncome + teenIncome - buyCost - buildCost;
-  // Debt never blocks the season (you can always refill the squad for free), it only stops you buying or building.
-  if ((buyCost > 0 || buildCost > 0) && moneyAfter < 0) problems.push(`You cannot afford this: the balance would be ${fmtMoney(moneyAfter)}.`);
-  return { ok: problems.length === 0, problems, size: roster.length, capacity, sellIncome, teenIncome, buyCost, buildCost, moneyAfter, roster };
+  const moneyAfter = s.money + sellIncome + teenIncome - buyCost;
+  // Debt never blocks the season (you can always refill the squad for free), it only stops you buying.
+  if (buyCost > 0 && moneyAfter < 0) problems.push(`You cannot afford this: the balance would be ${fmtMoney(moneyAfter)}.`);
+  return { ok: problems.length === 0, problems, size: roster.length, capacity, sellIncome, teenIncome, buyCost, moneyAfter, roster };
 }
 
 /** A sensible default: the best scouted prospect for each retiree's position, no selling, no buying. */
@@ -830,12 +938,6 @@ export function completeOffseason(prev: SeasonState, plan: OffseasonPlan): Seaso
     if (!next) break;
     team.reserves.push(next.id);
   }
-  if (plan.build) {
-    const all = (state.facilities ??= {});
-    const mine = (all[state.managedId] ??= {});
-    mine[plan.build] = levelOf(mine, plan.build) + 1;
-    news.push(`Project complete: the ${FACILITIES[plan.build].name} reaches level ${mine[plan.build]} of ${MAX_FACILITY_LEVEL} for ${fmtMoney(check.buildCost)}. ${FACILITIES[plan.build].effect}`);
-  }
   state.money = check.moneyAfter;
   delete state.intake;
   delete state.offers; // the UI makes you answer first; confirming the offseason anyway means staying
@@ -932,6 +1034,10 @@ export function acceptOffer(prev: SeasonState, clubId: string): SeasonState {
     old.reserves = (old.reserves ?? []).filter((id) => id !== spare.id);
     delete state.careerStats[spare.id];
   }
+  // A project in progress is finished for the club you leave: it is paid for and belongs to them.
+  if (state.project) state.news = [finishProject(state, 0), ...state.news];
+  delete state.proposal;
+  delete state.boardLoan;
   const club = teamById(state, clubId);
   state.managedId = clubId;
   state.tactic = club.style;

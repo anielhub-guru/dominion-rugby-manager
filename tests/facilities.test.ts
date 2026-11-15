@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_START_YEAR, ERA_LENGTH, eraIndex, seasonYear, seasonsToNextEra } from "../src/league/calendar";
-import { MAX_FACILITY_LEVEL, PROJECT_COST, academyBonus, recoveryBonus, reducedInjury, trainingSlots, upgradeCost } from "../src/league/facilities";
-import { SAVE_VERSION, autoPlan, checkPlan, completeOffseason, facilitiesOf, isSeasonOver, migrateSave, newGame, playMatchday, startNextSeason, teamById, afterMatch, type SeasonState } from "../src/league/season";
+import { MAX_FACILITY_LEVEL, PROJECT_COST, PROJECT_MATCHDAYS, PROPOSAL_LAPSE_MATCHDAY, academyBonus, recoveryBonus, reducedInjury, trainingSlots, upgradeCost } from "../src/league/facilities";
+import { SAVE_VERSION, acceptProposal, autoPlan, completeOffseason, declineProposal, proposalShare, startProject, facilitiesOf, isSeasonOver, migrateSave, newGame, playMatchday, startNextSeason, afterMatch, type SeasonState } from "../src/league/season";
 
 function offseason(seed = 1): SeasonState {
   let s = newGame(seed, "ash");
@@ -50,33 +50,45 @@ describe("facility effects", () => {
   });
 });
 
-describe("building in the offseason", () => {
-  it("costs money, adds a level, and is announced", () => {
+const playSeason = (s: SeasonState) => {
+  while (!isSeasonOver(s)) s = playMatchday(s).state;
+  return s;
+};
+
+describe("construction", () => {
+  it("is paid up front, takes matchdays, and then adds a level with a news link", () => {
     const s = offseason();
-    const plan = { ...autoPlan(s), build: "training" as const };
-    const check = checkPlan(s, plan);
-    expect(check.ok).toBe(true);
-    expect(check.buildCost).toBe(PROJECT_COST[0]);
-    expect(check.moneyAfter).toBe(checkPlan(s, autoPlan(s)).moneyAfter - PROJECT_COST[0]);
-    const next = completeOffseason(s, plan);
-    expect(facilitiesOf(next).training).toBe(1);
-    expect(next.money).toBe(check.moneyAfter);
-    expect(next.news.some((n) => n.text.includes("Training ground"))).toBe(true);
-    expect(facilitiesOf(newGame(1, "ash"))).toEqual({});
+    const before = s.money;
+    let b = startProject(s, "training");
+    expect(b.money).toBe(before - PROJECT_COST[0]);
+    expect(b.project).toMatchObject({ facility: "training", level: 1, remaining: PROJECT_MATCHDAYS[0] });
+    expect(facilitiesOf(b).training ?? 0).toBe(0);
+    expect(b.news[0].link).toBe("projects");
+    const done = completeOffseason(b, autoPlan(b));
+    let t = done;
+    for (let i = 0; i < PROJECT_MATCHDAYS[0] - 1; i++) t = playMatchday(t).state;
+    expect(facilitiesOf(t).training ?? 0).toBe(0);
+    expect(t.project?.remaining).toBe(1);
+    t = playMatchday(t).state;
+    expect(facilitiesOf(t).training).toBe(1);
+    expect(t.project).toBeUndefined();
+    expect(t.news.some((n) => n.link === "projects" && n.text.includes("Project complete"))).toBe(true);
   });
 
-  it("is refused when you cannot afford it or it is already fully upgraded", () => {
+  it("allows one project at a time, and refuses what you cannot afford or is fully upgraded", () => {
     const s = offseason();
-    expect(checkPlan({ ...s, money: -5000 }, { ...autoPlan(s), build: "medical" }).ok).toBe(false);
-    const maxed = { ...s, facilities: { ash: { academy: MAX_FACILITY_LEVEL } } };
-    expect(checkPlan(maxed, { ...autoPlan(maxed), build: "academy" }).problems.join(" ")).toContain("fully upgraded");
+    const b = startProject(s, "medical");
+    expect(() => startProject(b, "academy")).toThrow(/already under construction/);
+    expect(() => startProject({ ...s, money: 10 }, "medical")).toThrow(/cannot afford/);
+    expect(() => startProject({ ...s, facilities: { ash: { academy: MAX_FACILITY_LEVEL } } }, "academy")).toThrow(/fully upgraded/);
   });
 
-  it("belongs to the club, so other clubs are unaffected", () => {
+  it("does not tick in the offseason, and belongs to the club", () => {
     const s = offseason();
-    const next = completeOffseason(s, { ...autoPlan(s), build: "academy" });
-    expect(next.facilities?.ash?.academy).toBe(1);
-    expect(next.facilities?.bla).toBeUndefined();
+    const b = startProject(s, "academy");
+    expect(b.project?.remaining).toBe(PROJECT_MATCHDAYS[0]);
+    expect(() => playMatchday(b)).toThrow();
+    expect(b.facilities?.bla).toBeUndefined();
   });
 
   it("training ground puts more players into training each matchday", () => {
@@ -89,14 +101,76 @@ describe("building in the offseason", () => {
   });
 
   it("youth academy raises the prospects on offer", () => {
-    const withAcademy = (lv: number) => {
-      let s = { ...newGame(5, "ash"), facilities: { ash: { academy: lv } } } as SeasonState;
-      while (!isSeasonOver(s)) s = playMatchday(s).state;
-      return startNextSeason(s).intake!.prospects.map((p) => p.potential ?? 0);
+    const prospects = (lv: number) => {
+      const s = playSeason({ ...newGame(5, "ash"), facilities: { ash: { academy: lv } } } as SeasonState);
+      return startNextSeason(s).intake!.prospects.filter((p) => !p.genius).map((p) => p.potential ?? 0);
     };
-    const [base, up] = [withAcademy(0), withAcademy(3)];
-    expect(up.length).toBe(base.length);
+    const [base, up] = [prospects(0), prospects(3)];
     expect(up.reduce((a, b) => a + b, 0)).toBeGreaterThan(base.reduce((a, b) => a + b, 0));
-    expect(teamById(newGame(5, "ash"), "ash")).toBeTruthy();
+  });
+});
+
+describe("genius discovery", () => {
+  const found = (lv: number) => {
+    let n = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const s = startNextSeason(playSeason({ ...newGame(seed, "ash"), facilities: lv ? { ash: { academy: lv } } : undefined } as SeasonState));
+      const g = s.intake!.prospects.filter((p) => p.genius);
+      if (g.length) {
+        n++;
+        expect(g).toHaveLength(1);
+        expect(g[0].potential).toBeGreaterThanOrEqual(88);
+        expect(s.intake!.prospects).toHaveLength(s.intake!.prospects.length);
+        expect(s.news.some((x) => x.text.includes("found a genius"))).toBe(true);
+      }
+    }
+    return n;
+  };
+  it("only happens with an academy, and sometimes with one", () => {
+    expect(found(0)).toBe(0);
+    const n = found(3);
+    expect(n).toBeGreaterThan(0);
+    expect(n).toBeLessThan(12);
+  }, 30000);
+});
+
+describe("the board's proposals", () => {
+  const withProposal = () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const s = startNextSeason(playSeason(newGame(seed, "ash")));
+      if (s.proposal) return { ...s, offers: undefined } as SeasonState;
+    }
+    throw new Error("no proposal in 30 seeds");
+  };
+
+  it("picks the least developed facility and advances half the cost", () => {
+    const s = withProposal();
+    expect(proposalShare(s)).toBe(PROJECT_COST[0] / 2);
+    expect(s.news.some((n) => n.link === "projects" && n.text.includes("The board proposes"))).toBe(true);
+  });
+
+  it("starts the project at half price and takes the advance back at season end", () => {
+    const s = withProposal();
+    const b = acceptProposal(s);
+    expect(b.money).toBe(s.money - PROJECT_COST[0] / 2);
+    expect(b.boardLoan).toBe(PROJECT_COST[0] / 2);
+    expect(b.proposal).toBeUndefined();
+    expect(b.project?.facility).toBe(s.proposal!.facility);
+    const plain = { ...s, proposal: undefined } as SeasonState;
+    const next = (x: SeasonState) => startNextSeason(playSeason(completeOffseason(x, autoPlan(x))));
+    const after = next(b);
+    expect(after.boardLoan).toBeUndefined();
+    expect(after.news.some((n) => n.text.includes("takes back"))).toBe(true);
+    expect(next(plain).news.some((n) => n.text.includes("takes back"))).toBe(false);
+  });
+
+  it("can be declined, and lapses after matchday six", () => {
+    const s = withProposal();
+    expect(declineProposal(s).proposal).toBeUndefined();
+    let t = completeOffseason(s, autoPlan(s));
+    for (let i = 0; i < PROPOSAL_LAPSE_MATCHDAY - 1; i++) t = playMatchday(t).state;
+    expect(t.proposal).toBeDefined();
+    t = playMatchday(t).state;
+    expect(t.proposal).toBeUndefined();
   });
 });

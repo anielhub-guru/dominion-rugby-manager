@@ -497,3 +497,7 @@ tr.insp { box-shadow: inset 3px 0 0 var(--acc); background: rgba(143, 227, 166, 
 /* Offseason club projects: the facility on the left, its upgrade button on the right. */
 .project { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid rgba(255, 255, 255, 0.08); }
 .project:first-of-type { border-top: 0; }
+
+/* A link that jumps to another tab, used in news and summary cards. */
+.golink { color: inherit; text-decoration: underline; text-underline-offset: 2px; opacity: 0.85; cursor: pointer; }
+.golink:hover { opacity: 1; }

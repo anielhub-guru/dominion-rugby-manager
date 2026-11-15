@@ -176,6 +176,23 @@ export function makeProspects(team: Team, slotKey: string, role: Role, seed: num
   });
 }
 
+/** A genius the youth academy has found: a teenager with a very high ceiling. The scouting report is close to the truth. */
+export function makeGenius(team: Team, slotKey: string, role: Role, seed: number): Player {
+  const rng = new Rng(hashSeed(seed, team.id, "genius", slotKey));
+  const firstNames = team.gender === "women" ? FIRST_WOMEN : FIRST_MEN;
+  const taken = new Set(team.players.map((p) => p.name));
+  let name: string;
+  do {
+    name = `${rng.pick(firstNames)} ${rng.pick(LAST)}`;
+  } while (taken.has(name));
+  const potential = clampRating(88 + rng.int(0, 7));
+  const p = buildPlayer(rng, `${team.id}-g${slotKey}`, name, role, rng.int(17, 18), potential - rng.int(14, 18), team.gender);
+  p.potential = potential;
+  p.scouted = clampRating(potential + rng.int(-3, 3));
+  p.genius = true;
+  return p;
+}
+
 export function overall(p: Player): number {
   return Math.round((p.power + p.pace + p.handling + p.tackling + p.kicking + p.stamina) / 6);
 }

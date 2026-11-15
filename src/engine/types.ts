@@ -39,6 +39,8 @@ export interface Player {
   potential?: number;
   /** Noisy scouting estimate of potential, set on prospects so the true value stays hidden until signed. */
   scouted?: number;
+  /** A once-in-a-generation talent found by the youth academy. */
+  genius?: boolean;
   /** Retires when the offseason decision is confirmed. */
   retiring?: boolean;
   /** Avatar look, generated when the player is created. Missing on older saves: see lookOf. */

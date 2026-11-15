@@ -6,10 +6,17 @@ drift apart). It is shown in the app footer and on the new-game screen.
 
 ## Unreleased
 
-- Club facilities. In the offseason you can start one project a year: a Training ground (one more player trains each
-  matchday), a Medical centre (injuries last a match less, never under one, and tired players recover faster) or a
-  Youth academy (prospects arrive with +2 potential). Each has three levels, costing 1m, 2m and 3m, paid from your
-  balance, so building competes with signing players. Facilities belong to the club, not to you.
+- Club facilities, on their own Projects tab (key 4; the others move along one). Build a Training ground (one more
+  player trains each matchday), a Medical centre (injuries last a match less, never under one, and tired players
+  recover faster) or a Youth academy (prospects arrive with +2 potential). Each has three levels costing 1m, 2m and
+  3m, paid up front. Construction takes matchdays (3, 5 and 7), only one project runs at a time, and time only passes
+  when matches are played. News items about projects link to the tab, and the Overview and Training screens point to it.
+  Facilities belong to the club: if you move on, a project in progress is finished for the club you leave.
+- Genius discovery. A youth academy can turn up a genius in the offseason (10% a year per level): a teenager with a
+  potential of 88 or more, marked GENIUS on your youth shortlist.
+- Board proposals. In the offseason the board may propose upgrading your least developed facility. It advances half
+  the cost, you pay the other half, and it takes its half back out of that season's finances. The offer lapses after
+  matchday 6 and uses your one construction slot.
 - A calendar. Each season is a year (the header shows it), and an era will last ten seasons whatever your results.
   New games start in 2020 for now. Saves upgrade to version 10.
 
