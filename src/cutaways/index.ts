@@ -21,10 +21,10 @@ const KEY = "dominion:cutaways";
 
 function loadSettings(): Settings {
   const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const fallback: Settings = { mode: reduced ? "dots" : "diagonal", shake: false, freq: "normal" };
+  const fallback: Settings = { mode: reduced ? "dots" : "diagonal", shake: false, freq: "often" };
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? "null") as Partial<Settings> | null;
-    if (saved && TRANSITIONS.some(([id]) => id === saved.mode)) return { mode: saved.mode!, shake: !!saved.shake, freq: FREQUENCIES.some((f) => f.id === saved.freq) ? saved.freq! : "normal" };
+    if (saved && TRANSITIONS.some(([id]) => id === saved.mode)) return { mode: saved.mode!, shake: !!saved.shake, freq: FREQUENCIES.some((f) => f.id === saved.freq) ? saved.freq! : "often" };
   } catch {
     // unreadable setting: use the default
   }
@@ -136,7 +136,7 @@ export class Cutaways {
     const kinds = kindsFor(ev);
     // The injury cutaway is a placeholder with no artwork, so it shows in both leagues; every other kind is women's league art.
     if (home.gender !== "women" && !kinds.includes("injury")) return null;
-    const f = FREQUENCIES.find((x) => x.id === this.settings.freq) ?? FREQUENCIES[1];
+    const f = FREQUENCIES.find((x) => x.id === this.settings.freq) ?? FREQUENCIES[2];
     if (!kinds.length || this.shown >= f.max || secOf(ev) - this.lastSec < f.cooldown) return null;
     const kind = kinds[Math.floor(rand(ev, 43) * kinds.length)];
     if (rand(ev, 41) >= Math.min(1, CHANCE[kind] * f.chance)) return null;

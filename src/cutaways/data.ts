@@ -64,7 +64,7 @@ export type Frequency = "rare" | "normal" | "often" | "lots";
 
 /**
  * How often cutaways come, chosen in the game. `chance` scales every CHANCE below (capped at 1), `max` is the
- * most in one match, and `cooldown` is the fewest match seconds between two. Normal is the original feel:
+ * most in one match, and `cooldown` is the fewest match seconds between two. Often is the default; Normal is the original feel:
  * a treat, two or three a game.
  */
 export const FREQUENCIES: readonly { id: Frequency; label: string; chance: number; max: number; cooldown: number }[] = [
