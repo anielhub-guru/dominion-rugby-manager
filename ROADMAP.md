@@ -32,7 +32,8 @@ Start a career in a different era with the same club, so the experience differs 
 - Era history is fictional and small in scale. Real events can be used as background but aren't required.
 - Brief story moments between play, built around big dreams, breaking out and legacy.
 - Recurring characters across eras, for example a young team captain who later becomes a board member or a sponsor.
-- **Era-specific facilities.** Each era names the same facility types differently, and a later era's version unlocks as you progress through the eras.
+- **Eras are time-bound, about 10 years each.** The next era arrives on schedule whether or not the player has won anything, so the game never waits on or errors over an achievement.
+- **Era-specific facilities.** Each era names the same facility types differently. When a new era begins, its version of each facility replaces the old one, and the upgrades you've bought carry over.
   - Every facility has the same simple upgrade: a flat +X on top of the starter version. This works the same in any era.
   - Because facilities carry on across eras, later seasons keep their era flavour instead of settling into the same game.
 
