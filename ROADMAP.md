@@ -19,6 +19,10 @@ The theme is business management: every deal gives something and costs flexibili
 - **Sponsor and investor deals.** A shirt sponsor or an investment bank offers money in return for an obligation.
   - Example: play a named player for X matches. You can break the deal and bench the player, but then you lose the money or take a penalty. The tension is keeping the commitment against winning the league.
   - Example: take an investment but lose the ability to change clubs for 3 seasons.
+- **Future-paid incentives.** The same offer, but the money arrives later if a condition is met, so one system stays interesting in many forms.
+  - Pay now (built): the board or a sponsor covers the cost of a facility, sometimes in return for staying at the club.
+  - Pay later: a sponsor promises money in the offseason if a named player plays X games, or if the club hits a target such as a top-three finish, X wins or a clean sheet streak.
+  - Each form has a condition, a payout and a consequence if the condition is missed (no money, or a penalty).
 - **Construction projects.** Built: training ground, medical centre and youth academy, with build time, a Projects tab, board proposals and genius discovery (see the changelog).
 
 ## Era starts
