@@ -255,7 +255,7 @@ export class ArenaView {
       const a = sim.agents[beat.ball.by];
       sim.glideMs = clamp(Math.hypot(sim.ballFrom.x - a.x, sim.ballFrom.y - a.y) * 35, 140, 800);
       // Out over the touchline: it lies still for a beat (0.1 to 0.3s) so the throw-in does not look like a snap-back.
-      const out = sim.ballFrom.y < 0 || sim.ballFrom.y > WIDTH_M;
+      const out = (sim.ballFrom.y < 0 || sim.ballFrom.y > WIDTH_M) && prev?.ball.k !== "held";
       sim.restMs = out ? 100 + hash01(beat.ball.by, i) * 200 : 0;
     }
     for (const id of Object.keys(sim.agents)) {
@@ -424,7 +424,7 @@ export class ArenaView {
       // Nobody runs off the end of the field: the dead-ball line stops them.
       a.x = clamp(a.x + a.vx * sec, -2, 102.5);
       if (a.x === 102.5 || a.x === -2) a.vx = 0;
-      a.y = clamp(a.y + a.vy * sec, 1.5, WIDTH_M - 1.5);
+      a.y = clamp(a.y + a.vy * sec, -6, WIDTH_M + 6); // a retriever may step over the touchline for the ball
       const sp = Math.hypot(a.vx, a.vy);
       if (sp > 1.5 && a.down <= 0) {
         // Turn gradually towards the direction of travel.

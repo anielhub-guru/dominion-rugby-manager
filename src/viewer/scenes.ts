@@ -129,6 +129,18 @@ class SceneBuilder {
   }
 }
 
+/**
+ * The ball is out over the touchline. Nobody has it, so a defender jogs out to fetch it, carries it back to
+ * the mark, the lines form up and he throws it in to a jumper. `form` sets the line-out shape, including the mark.
+ */
+function lineOut(sb: SceneBuilder, out: Pt, thrower: string, jumper: string, form: (p: Pos) => void) {
+  sb.go(650, (p) => { p[thrower] = { x: out.x, y: out.y - 0.02 }; }, { k: "at", p: out }, { cap: "The ball is out of play: a defender jogs over to fetch it" });
+  sb.go(520, () => {}, { k: "held", by: thrower });
+  sb.go(800, form, { k: "held", by: thrower }, { banner: { text: "LINE-OUT", color: AMBER, sub: "Defence throws in" }, cap: "Line-out: back to the mark, and the lines form up" });
+  sb.go(600, () => {}, { k: "pass", from: thrower, to: jumper, arc: 14 }, { cap: "Thrown in straight down the line" });
+  sb.go(550, () => {}, { k: "held", by: jumper });
+}
+
 /** Attackers in echelon around the holder; the Pivot stays close behind when someone else has it. */
 /**
  * How the two sides are set up for the scene being built: the attacking and defending tactic
@@ -621,7 +633,7 @@ function buildFullScene(ev: MatchEvent): Scene | null {
         q[did] = { x: end + 0.4, y: 0.86 };
       }, { k: "held", by: cid }, { cap: "Forced out towards the touchline", hits: [{ kind: "tackle", runner: cid, other: did, result: "driven", at: 0.4 }] });
       sb.go(700, () => {}, { k: "fly", from: cid, to: { x: end + 2, y: 1.12 }, arc: 16, style: "loose" }, { banner: { text: "OUT OF PLAY!", color: AMBER, sub: "Line-out to the defence" }, cap: "The ball crosses the touchline. Possession switches." });
-      sb.go(1100, (q) => {
+      lineOut(sb, { x: end + 2, y: 1.12 }, D(2), D(1), (q) => {
         const sideY = 0.93;
         q[D(2)] = { x: end + 0.5, y: 1.0 };
         const att = [0, 1, 3];
@@ -631,7 +643,7 @@ function buildFullScene(ev: MatchEvent): Scene | null {
         q[A(2)] = { x: end - 4, y: 0.7 };
         q[A(4)] = { x: end - 7, y: 0.6 };
         q[D(4)] = { x: end + 6, y: 0.7 };
-      }, { k: "held", by: D(2) }, { cap: "Line-out: the defending side throws it in" });
+      });
     } else if (v === "foul") {
       sb.go(800, (q) => {
         formation(q, end, y, ai);
@@ -790,7 +802,7 @@ function buildFullScene(ev: MatchEvent): Scene | null {
     }, { k: "fly", from: kid, to: land, arc: 80, style: "punt" }, { banner: dead ? undefined : touch ? { text: "INTO TOUCH!", color: AMBER, sub: ev.player } : { text: "KICK!", color: GREEN, sub: ev.player }, cap: dead ? "Too long. It is going to run dead." : touch ? "The kick bounces out over the touchline" : "A towering kick for territory" });
     if (touch) {
       const lx = land.x;
-      sb.go(1100, (q) => {
+      lineOut(sb, land, D(2), D(1), (q) => {
         q[D(2)] = { x: lx + 0.5, y: 1.0 };
         [0, 1, 3].forEach((i, n) => {
           q[A(i)] = { x: lx - 1 + n * 2.1, y: 0.83 };
@@ -799,7 +811,7 @@ function buildFullScene(ev: MatchEvent): Scene | null {
         q[A(2)] = { x: lx - 4, y: 0.7 };
         q[A(4)] = { x: lx - 7, y: 0.6 };
         q[D(4)] = { x: lx + 6, y: 0.7 };
-      }, { k: "held", by: D(2) }, { banner: { text: "LINE-OUT", color: AMBER, sub: "Defence throws in" }, cap: "Line-out: the defending side throws it in" });
+      });
     } else if (dead) {
       sb.go(900, () => {}, { k: "fly", from: land, to: { x: 106, y: 0.5 }, arc: 10, style: "loose" }, { banner: { text: "DEAD BALL", color: AMBER }, cap: "Over the dead-ball line. Drop-out for the defence." });
     } else {
