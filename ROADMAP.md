@@ -32,6 +32,9 @@ Start a career in a different era with the same club, so the experience differs 
 - Era history is fictional and small in scale. Real events can be used as background but aren't required.
 - Brief story moments between play, built around big dreams, breaking out and legacy.
 - Recurring characters across eras, for example a young team captain who later becomes a board member or a sponsor.
+- **Era-specific facilities.** Each era names the same facility types differently, and a later era's version unlocks as you progress through the eras.
+  - Every facility has the same simple upgrade: a flat +X on top of the starter version. This works the same in any era.
+  - Because facilities carry on across eras, later seasons keep their era flavour instead of settling into the same game.
 
 ## Other ideas from earlier discussion
 
