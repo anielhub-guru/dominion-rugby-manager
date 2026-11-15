@@ -84,9 +84,9 @@ const INTERCEPT: Bank = [
   (f) => `${f.t} jumps the passing lane, intercepts, and runs ${f.run}m the other way for ${f.opp}.`,
 ];
 const KICK_TOUCH: Bank = [
-  (f) => `${f.k} sends a big kick ${f.dist}m downfield, but it bounces into touch. Out of bounds, and ${f.opp} take the line-out ${f.where}.`,
+  (f) => `${f.k} sends a big kick ${f.dist}m downfield, but it bounces into touch. Out of bounds, and ${f.opp} take the line-out.`,
   (f) => `${f.k} finds the touchline with a ${f.dist}m kick. The ball is out of play and ${f.opp} will throw in.`,
-  (f) => `The kick from ${f.k} drifts off the pitch and bounces out. Line-out to ${f.opp} ${f.where}.`,
+  (f) => `The kick from ${f.k} drifts off the pitch and bounces out. Line-out to ${f.opp}.`,
   (f) => `${f.k} clears ${f.dist}m, but it skips over the sideline. Out of bounds: ${f.opp} have the throw-in.`,
 ];
 const KICK_DEAD: Bank = [
