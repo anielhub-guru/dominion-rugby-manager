@@ -155,7 +155,7 @@ export function makeReserves(team: Team, seed: number): Player[] {
 }
 
 /** Young prospects for a vacancy. Their true potential is hidden behind a noisy `scouted` value. */
-export function makeProspects(team: Team, slotKey: string, role: Role, seed: number, count = 3): Player[] {
+export function makeProspects(team: Team, slotKey: string, role: Role, seed: number, count = 3, bonus = 0): Player[] {
   const def = TEAM_DEFS.find((d) => d.id === team.id);
   const strength = def?.strength ?? 62;
   const firstNames = team.gender === "women" ? FIRST_WOMEN : FIRST_MEN;
@@ -168,7 +168,7 @@ export function makeProspects(team: Team, slotKey: string, role: Role, seed: num
     } while (taken.has(name));
     taken.add(name);
     // Club tiers matter less for new talent than for the founding squads, so dynasties rise and fall.
-    const potential = clampRating(PROSPECT_CENTRE + (strength - PROSPECT_CENTRE) * 0.4 + rng.int(-6, 10));
+    const potential = clampRating(PROSPECT_CENTRE + (strength - PROSPECT_CENTRE) * 0.4 + rng.int(-6, 10) + bonus);
     const p = buildPlayer(rng, `${team.id}-p${slotKey}-${k + 1}`, name, role, rng.int(17, 19), potential - rng.int(14, 20), team.gender);
     p.potential = potential;
     p.scouted = clampRating(potential + rng.int(-6, 6));

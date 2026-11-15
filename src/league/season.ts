@@ -8,11 +8,13 @@ import { heavyNotes, heaviestDefeat, mergeNotes, recordMeeting, rivalNotes, riva
 import { computeStandings, standingsAt } from "./standings";
 import { defaultLeagueRecords, recordMatch, recordRetirement, recordSeasonEnd, type Legend, type LeagueRecords } from "./history";
 import { BONUS_FLAVOUR, MATCH_PAY, earnsSquadSlot, MAX_BUYS, MONEY_START, fmtMoney, goalBonus, goalResult, playerValue, prizeFor, sellPrice, teenSalePrice, wageOf } from "./economy";
+import { DEFAULT_START_YEAR } from "./calendar";
+import { FACILITIES, MAX_FACILITY_LEVEL, academyBonus, levelOf, recoveryBonus, reducedInjury, trainingSlots, upgradeCost, type FacilityId, type FacilityLevels } from "./facilities";
 import { RESERVE_COUNT, evolvePlayers, playShare, generateTeams, makeReserves, initialPotential, makeProspects, objectiveTarget, overall, teamRating } from "./teams";
 
 export { describeLine, impact };
 
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
 /** Five starters, three bench, two reserves. */
 export const SQUAD_SIZE = 10;
 /** Extra squad places a club can earn (see economy.ts earnsSquadSlot). They are depth: extra reserves, outside the matchday eight. */
@@ -52,6 +54,8 @@ export interface OffseasonPlan {
   sell: string[];
   sign: string[];
   buy: string[];
+  /** A facility to upgrade one level this offseason. At most one project a year. */
+  build?: FacilityId;
 }
 
 export interface SeasonRecord {
@@ -138,6 +142,10 @@ export interface SeasonState {
   legends: Record<string, Legend[]>;
   /** Extra squad places earned at the club you manage, on top of SQUAD_SIZE. Lost if you move to another club. */
   extraSlots?: number;
+  /** The calendar year of season 1. The year of any season is startYear + season - 1 (see calendar.ts). */
+  startYear: number;
+  /** Facility levels by club id. A club with no entry is at the starter level for everything. */
+  facilities?: Record<string, FacilityLevels>;
 }
 
 /** Upgrades a saved season from an older version, or returns null if it cannot be upgraded. */
@@ -162,11 +170,12 @@ export function migrateSave(raw: SeasonState): SeasonState | null {
   }
   if (s.version === 7) s = { ...s, version: 8 };
   if (s.version === 8) s = { ...s, version: 9, records: defaultLeagueRecords(s.seed, s.gender), legends: {} };
+  if (s.version === 9) s = { ...s, version: 10, startYear: DEFAULT_START_YEAR };
   if (s.version !== SAVE_VERSION) return null;
   return { ...s, shape: s.shape ?? "sweeper" };
 }
 
-export function newGame(seed: number, managedId: string, gender: Gender = "men"): SeasonState {
+export function newGame(seed: number, managedId: string, gender: Gender = "men", startYear: number = DEFAULT_START_YEAR): SeasonState {
   const teams = generateTeams(seed, gender);
   if (!teams.some((t) => t.id === managedId)) throw new Error(`Unknown team ${managedId}`);
   const fixtures = buildSchedule(teams.map((t) => t.id), 1);
@@ -175,6 +184,7 @@ export function newGame(seed: number, managedId: string, gender: Gender = "men")
     version: SAVE_VERSION,
     seed,
     gender,
+    startYear,
     season: 1,
     managedId,
     tactic: me.style,
@@ -201,6 +211,9 @@ export function teamById(s: SeasonState, id: string): Team {
   if (!t) throw new Error(`Unknown team ${id}`);
   return t;
 }
+
+/** The facility levels at the club you manage. */
+export const facilitiesOf = (s: Pick<SeasonState, "facilities" | "managedId">): FacilityLevels => s.facilities?.[s.managedId] ?? {};
 
 export function managedFixture(s: SeasonState): Fixture | undefined {
   return s.fixtures.find((f) => f.matchday === s.matchday && (f.homeId === s.managedId || f.awayId === s.managedId));
@@ -337,9 +350,9 @@ export function careerLine(s: SeasonState, id: string): CareerTotals {
  * players recover fully in a couple of matches; a stamina-60 regular settles around 18, stamina 40 around 33.
  */
 export const LOAD_PER_MATCH = 30;
-export function afterMatch(p: { stamina: number; tired?: number }, share: number): number {
+export function afterMatch(p: { stamina: number; tired?: number }, share: number, bonus = 0): number {
   const gain = LOAD_PER_MATCH * share * (1.5 - p.stamina / 100);
-  const recover = 0.3 + p.stamina * 0.005;
+  const recover = Math.min(0.95, 0.3 + p.stamina * 0.005 + bonus);
   return Math.min(100, Math.max(0, ((p.tired ?? 0) + gain) * (1 - recover)));
 }
 
@@ -347,7 +360,7 @@ function applyLoad(state: SeasonState, logs: MatchLog[]) {
   const load: Record<string, number> = Object.assign({}, ...logs.map((l) => l.load ?? {}));
   for (const t of state.teams) {
     for (const p of t.players) {
-      const v = afterMatch(p, load[p.id] ?? 0);
+      const v = afterMatch(p, load[p.id] ?? 0, t.id === state.managedId ? recoveryBonus(facilitiesOf(state)) : 0);
       if (v < 0.5) delete p.tired;
       else p.tired = Math.round(v * 10) / 10;
     }
@@ -452,7 +465,8 @@ function recordPlayers(state: SeasonState, logs: MatchLog[]): string[] {
     for (const i of log.injuries ?? []) {
       if (i.games <= 0) continue; // a knock only ended that match
       const who = everyone.get(i.id);
-      if (who) who.p.injury = { label: i.label, games: i.games };
+      // The medical centre only helps the club you manage.
+      if (who) who.p.injury = { label: i.label, games: who.t.id === state.managedId ? reducedInjury(i.games, facilitiesOf(state)) : i.games };
     }
   }
   const mine = logs.find((l) => l.homeId === state.managedId || l.awayId === state.managedId);
@@ -468,7 +482,8 @@ function recordPlayers(state: SeasonState, logs: MatchLog[]): string[] {
     }
     for (const i of mine.injuries ?? []) {
       if (!team.players.some((p) => p.id === i.id)) continue;
-      news.push(i.games > 0 ? `${i.name} is injured (${i.label.toLowerCase()}) and will miss ${matchesText(i.games)}.` : `${i.name} took a knock (${i.label.toLowerCase()}) and came off, but should be fine for the next match.`);
+      const games = team.players.find((p) => p.id === i.id)?.injury?.games ?? i.games;
+      news.push(i.games > 0 ? `${i.name} is injured (${i.label.toLowerCase()}) and will miss ${matchesText(games)}.` : `${i.name} took a knock (${i.label.toLowerCase()}) and came off, but should be fine for the next match.`);
     }
   }
   // Keep the manager's starting five legal: replace any suspended or injured starter with the best available player.
@@ -512,7 +527,7 @@ function train(state: SeasonState, md: number): string[] {
   const out: string[] = [];
   // Only players who can still improve are picked, so a maxed-out player never wastes one of the three slots.
   const open = (p: Player) => overall(p) < (p.potential ?? 99) && focus.attrs.some((a) => p[a] < 95);
-  for (const p of rng.shuffle(team.players.filter(open)).slice(0, 3)) {
+  for (const p of rng.shuffle(team.players.filter(open)).slice(0, trainingSlots(facilitiesOf(state)))) {
     if (!rng.chance(0.8)) continue;
     const attr = rng.pick(focus.attrs.filter((a) => p[a] < 95));
     p[attr]++;
@@ -640,7 +655,7 @@ const managedRetirees = (state: SeasonState, retirees: Map<string, Player[]>) =>
 function buildIntake(state: SeasonState, retiring: string[]): Intake {
   const team = teamById(state, state.managedId);
   const vacated = new Set(retiring.map((id) => team.players.find((p) => p.id === id)!.role));
-  const prospects = ROLES.flatMap((role) => makeProspects(team, `${state.season}.${role}`, role, state.seed, vacated.has(role) ? 3 : 1));
+  const prospects = ROLES.flatMap((role) => makeProspects(team, `${state.season}.${role}`, role, state.seed, vacated.has(role) ? 3 : 1, academyBonus(facilitiesOf(state))));
 
   // Each AI club lists one player. Veterans and bench players are far likelier than stars,
   // and the asking price is off the player's true value by a club's own guess, up or down.
@@ -679,6 +694,8 @@ export interface PlanCheck {
   sellIncome: number;
   teenIncome: number;
   buyCost: number;
+  /** What the facility project costs (0 when none is chosen). */
+  buildCost: number;
   moneyAfter: number;
   /** The squad as it would be after the plan. */
   roster: Player[];
@@ -706,10 +723,13 @@ export function checkPlan(s: SeasonState, plan: OffseasonPlan): PlanCheck {
   const unsigned = intake.prospects.filter((p) => !plan.sign.includes(p.id));
   const teenIncome = unsigned.reduce((t, p) => t + teenSalePrice(p), 0);
   const buyCost = bought.reduce((t, l) => t + (l?.price ?? 0), 0);
-  const moneyAfter = s.money + sellIncome + teenIncome - buyCost;
-  // Debt never blocks the season (you can always refill the squad for free), it only stops you buying.
-  if (buyCost > 0 && moneyAfter < 0) problems.push(`You cannot afford this: the balance would be ${fmtMoney(moneyAfter)}.`);
-  return { ok: problems.length === 0, problems, size: roster.length, capacity, sellIncome, teenIncome, buyCost, moneyAfter, roster };
+  const buildCost = plan.build ? (upgradeCost(facilitiesOf(s), plan.build) ?? 0) : 0;
+  if (plan.build && !FACILITIES[plan.build]) problems.push("That is not a facility you can build.");
+  else if (plan.build && upgradeCost(facilitiesOf(s), plan.build) === null) problems.push(`The ${FACILITIES[plan.build].name} is already fully upgraded.`);
+  const moneyAfter = s.money + sellIncome + teenIncome - buyCost - buildCost;
+  // Debt never blocks the season (you can always refill the squad for free), it only stops you buying or building.
+  if ((buyCost > 0 || buildCost > 0) && moneyAfter < 0) problems.push(`You cannot afford this: the balance would be ${fmtMoney(moneyAfter)}.`);
+  return { ok: problems.length === 0, problems, size: roster.length, capacity, sellIncome, teenIncome, buyCost, buildCost, moneyAfter, roster };
 }
 
 /** A sensible default: the best scouted prospect for each retiree's position, no selling, no buying. */
@@ -809,6 +829,12 @@ export function completeOffseason(prev: SeasonState, plan: OffseasonPlan): Seaso
     const next = team.players.filter((p) => !team.lineup.includes(p.id) && !team.reserves!.includes(p.id)).sort((a, b) => overall(a) - overall(b))[0];
     if (!next) break;
     team.reserves.push(next.id);
+  }
+  if (plan.build) {
+    const all = (state.facilities ??= {});
+    const mine = (all[state.managedId] ??= {});
+    mine[plan.build] = levelOf(mine, plan.build) + 1;
+    news.push(`Project complete: the ${FACILITIES[plan.build].name} reaches level ${mine[plan.build]} of ${MAX_FACILITY_LEVEL} for ${fmtMoney(check.buildCost)}. ${FACILITIES[plan.build].effect}`);
   }
   state.money = check.moneyAfter;
   delete state.intake;

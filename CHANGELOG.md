@@ -6,6 +6,13 @@ drift apart). It is shown in the app footer and on the new-game screen.
 
 ## Unreleased
 
+- Club facilities. In the offseason you can start one project a year: a Training ground (one more player trains each
+  matchday), a Medical centre (injuries last a match less, never under one, and tired players recover faster) or a
+  Youth academy (prospects arrive with +2 potential). Each has three levels, costing 1m, 2m and 3m, paid from your
+  balance, so building competes with signing players. Facilities belong to the club, not to you.
+- A calendar. Each season is a year (the header shows it), and an era will last ten seasons whatever your results.
+  New games start in 2020 for now. Saves upgrade to version 10.
+
 - Auto select modes. A dropdown beside Auto select on the squad screen lets you choose how it picks. New: Most rested, which picks the freshest players for the starting five and
   bench (ratings and positions only break ties) and sends the most tired to the reserves. Banned and injured players
   are still left out.

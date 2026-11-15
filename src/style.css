@@ -493,3 +493,7 @@ tr.insp { box-shadow: inset 3px 0 0 var(--acc); background: rgba(143, 227, 166, 
 .sb-derby { display: inline-block; margin: 2px 0; padding: 1px 8px; font-size: 10px; font-weight: bold; letter-spacing: 1.5px; color: #fff; background: #c2412f; border-radius: 2px; }
 .cm-weather { color: var(--dim); font-size: 13px; letter-spacing: 1px; }
 .cm-weather[hidden] { display: none; }
+
+/* Offseason club projects: the facility on the left, its upgrade button on the right. */
+.project { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.project:first-of-type { border-top: 0; }

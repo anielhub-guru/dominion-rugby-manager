@@ -19,10 +19,7 @@ The theme is business management: every deal gives something and costs flexibili
 - **Sponsor and investor deals.** A shirt sponsor or an investment bank offers money in return for an obligation.
   - Example: play a named player for X matches. You can break the deal and bench the player, but then you lose the money or take a penalty. The tension is keeping the commitment against winning the league.
   - Example: take an investment but lose the ability to change clubs for 3 seasons.
-- **Construction projects.** The club proposes building a facility. Each costs money, and taking the money affects the next year's budget. A player could take on a project and then have no money left to buy players.
-  - Training facility: speeds up player training results.
-  - Healthcare facility: boosts recovery.
-  - Youth academy: raises the initial star ratings of youth intake, and could let you discover a genius.
+- **Construction projects.** Built: training ground, medical centre and youth academy, one upgrade per offseason (see the changelog). Still to do: the club proposing projects, and a way to discover a genius from the youth academy.
 
 ## Era starts
 

@@ -5,6 +5,8 @@ import { avatarBadge, avatarCanvas } from "./viewer/avatar";
 import { lookOf } from "./league/look";
 import { ATTRS, ROLES, type Gender, type MatchLog, type Player, type ShapeId, type TacticId, type Team } from "./engine/types";
 import { SHAPES, TACTICS, adviseShape, attackFit, slotPlayer } from "./engine/match";
+import { seasonYear } from "./league/calendar";
+import { FACILITIES, FACILITY_IDS, MAX_FACILITY_LEVEL, levelOf, upgradeCost } from "./league/facilities";
 import { MAX_BUYS, fmtMoney, sellPrice, teenSalePrice, wageOf } from "./league/economy";
 import {
   TRAINING,
@@ -31,6 +33,7 @@ import {
   acceptOffer,
   lastFinishHere,
   declineOffers,
+  facilitiesOf,
   type ClubOffer,
   type OffseasonPlan,
   SQUAD_SIZE,
@@ -625,8 +628,16 @@ function offseasonView(s: SeasonState): HTMLElement {
   };
   const money = (label: string, v: number, sign = "") => h("span", { class: "dim" }, `${label} ${sign}${fmtMoney(v)}   `);
   const summary = h("div", { class: "advice" },
-    h("b", {}, `Squad ${check.size}/${check.capacity}   `), money("Balance now", s.money), money("Unpicked prospects sold", check.teenIncome, "+"), money("Sales", check.sellIncome, "+"), money("Purchases", check.buyCost, "-"), h("b", {}, `Balance after ${fmtMoney(check.moneyAfter)}`));
-  const top = card(`Season ${s.season}: offseason`,
+    h("b", {}, `Squad ${check.size}/${check.capacity}   `), money("Balance now", s.money), money("Unpicked prospects sold", check.teenIncome, "+"), money("Sales", check.sellIncome, "+"), money("Purchases", check.buyCost, "-"), ...(check.buildCost ? [money("Project", check.buildCost, "-")] : []), h("b", {}, `Balance after ${fmtMoney(check.moneyAfter)}`));
+  const levels = facilitiesOf(s);
+  const projects = FACILITY_IDS.map((id) => {
+    const lv = levelOf(levels, id);
+    const cost = upgradeCost(levels, id);
+    const on = plan.build === id;
+    const btn = act(cost === null ? "Fully upgraded" : on ? `Building (${fmtMoney(cost)})` : `Upgrade for ${fmtMoney(cost)}`, on, () => (plan = { ...plan, build: on ? undefined : id }), cost === null || (!on && !!plan.build));
+    return h("div", { class: "project" }, h("div", {}, h("b", {}, FACILITIES[id].name), h("span", { class: "dim" }, `  level ${lv} of ${MAX_FACILITY_LEVEL}`), h("div", { class: "dim" }, FACILITIES[id].effect)), btn);
+  });
+  const top = card(`Season ${s.season} (${seasonYear(s.startYear, s.season)}): offseason`,
     h("p", { class: "dim" }, check.capacity > SQUAD_SIZE ? `Get the squad to between ${SQUAD_SIZE} and ${check.capacity} before the season starts. Your earned extra place${check.capacity - SQUAD_SIZE === 1 ? "" : "s"} can stay empty, but a bigger squad costs more in wages and gives you cover for injuries and bans. Prospects you do not sign are sold.` : "Get the squad back to ten before the season starts. Prospects you do not sign are sold."),
     summary,
     ...(check.problems.length ? [h("div", { class: "err" }, check.problems.join(" "))] : []),
@@ -639,7 +650,8 @@ function offseasonView(s: SeasonState): HTMLElement {
         adviceCard,
         card("Your squad", squad),
         card("Youth shortlist", h("div", { class: "hint" }, "● marks a position that lost a player. Prospects start weaker than established players and grow, so a teenager is an investment."), youth),
-        card("Transfer list", h("div", { class: "hint" }, `At most ${MAX_BUYS} signings per offseason. The selling club replaces the player with a youngster.`), market)),
+        card("Transfer list", h("div", { class: "hint" }, `At most ${MAX_BUYS} signings per offseason. The selling club replaces the player with a youngster.`), market),
+        card("Club projects", h("div", { class: "hint" }, "One upgrade per offseason, paid from your balance, so it competes with signings. Each level is a flat step up."), ...projects)),
       h("div", { class: "col sticky" }, comparePanel, card("Club news", h("ul", { class: "news" }, ...s.news.slice(0, 5).map(newsItem))))));
 }
 
@@ -1170,7 +1182,7 @@ function render() {
   const menuNew = h("button", {}, "Games");
   menuNew.onclick = newGameFlow;
   more.append(h("div", { class: "menu" }, menuQuick, menuNew));
-  const meta = h("div", { class: "hclub", title: `${club.name} · ${s.gender === "women" ? "Women's" : "Men's"} League · Season ${s.season}` }, h("span", { class: "crest" }, club.name.charAt(0)), h("div", { class: "who" }, h("b", {}, club.name), h("span", {}, `${s.gender === "women" ? "Women's" : "Men's"} League · Season ${s.season}`)));
+  const meta = h("div", { class: "hclub", title: `${club.name} · ${s.gender === "women" ? "Women's" : "Men's"} League · Season ${s.season}` }, h("span", { class: "crest" }, club.name.charAt(0)), h("div", { class: "who" }, h("b", {}, club.name), h("span", {}, `${s.gender === "women" ? "Women's" : "Men's"} League · Season ${s.season} · ${seasonYear(s.startYear, s.season)}`)));
   app.append(h("header", {}, h("div", { class: "brand" }, h("i"), h("span", {}, "DOMINION LEAGUE")), nav, h("span", { class: "spacer" }), meta, h("span", { class: "money" }, fmtMoney(s.money)), h("div", { class: "hactions" }, quick, newBtn, more, helpBtn, watch)));
 
   const body = h("main");
