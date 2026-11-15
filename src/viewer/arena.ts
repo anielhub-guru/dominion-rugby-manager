@@ -566,7 +566,8 @@ export class ArenaView {
       ball.vy *= k;
     }
     ball.x += ball.vx * sec;
-    ball.y = clamp(ball.y + ball.vy * sec, -3, WIDTH_M + 3);
+    // No walls: a loose ball that crosses a touchline or dead-ball line just keeps rolling out.
+    ball.y += ball.vy * sec;
   }
 
   // ---------------------------------------------------------------- drawing
