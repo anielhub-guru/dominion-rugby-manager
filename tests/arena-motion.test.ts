@@ -41,5 +41,39 @@ describe("highlight animation movement", () => {
       }
     }
     expect(scenes).toBeGreaterThan(50);
+  }, 30000);
+
+  it("an out-of-bounds ball stays put until the fetching player gets to it, then is thrown back in", () => {
+    let seen = 0;
+    for (let n = 0; n < 120 && seen < 6; n++) {
+      const m = simulateMatch({ id: "s", season: 1, matchday: 1, home: teams[n % 8], away: teams[(n + 3) % 8], homeTactic: "balanced", awayTactic: n % 2 ? "attacking" : "territory", seed: hashSeed("lo", n) });
+      for (const e of m.events) {
+        if (!e.highlight || !((e.type === "break" && e.variant === "touch") || (e.type === "kick" && e.variant === "touch"))) continue;
+        const sc = buildScene(e)!;
+        const v: any = Object.create(ArenaView.prototype);
+        v.cam = 0;
+        v.rate = () => 1;
+        v.load(sc);
+        const thrower = (sc.beats.find((b, i) => b.ball.k === "held" && (sc.beats[i - 1]?.ball as { style?: string } | undefined)?.style === "loose")!.ball as { by: string }).by;
+        let jumped = false;
+        let arrived = false;
+        for (let t = 0; t < 20000 && v.sim.t < v.total; t += 16) {
+          v.step(16);
+          const a = v.sim.agents[thrower];
+          const b = v.sim.ball;
+          const out = b.y < 0 || b.y > 40;
+          if (v.sim.arrivedAt >= 0) arrived = true;
+          // While the ball lies out of bounds and the fetcher is still more than 3m away, the ball must not move towards him.
+          if (out && v.sim.beat >= 1 && v.sim.arrivedAt < 0 && v.sim.restMs > 0) {
+            const d = Math.hypot(a.x - b.x, a.y - b.y);
+            if (d > 3) jumped = jumped || Math.hypot(b.x - v.sim.ballFrom.x, b.y - v.sim.ballFrom.y) > 0.5;
+          }
+        }
+        expect(jumped, `${e.type}/${e.variant}: ball moved before the fetcher arrived`).toBe(false);
+        expect(arrived, `${e.type}/${e.variant}: fetcher never reached the ball`).toBe(true);
+        seen++;
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
   });
 });

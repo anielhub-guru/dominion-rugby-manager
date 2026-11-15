@@ -112,6 +112,8 @@ interface Sim {
   glideMs: number;
   /** A ball that went out over the touchline rests there this long before it is picked up and thrown back in. */
   restMs: number;
+  /** Time in the beat when the fetching player reached the loose ball, or -1 while he is still on his way. */
+  arrivedAt: number;
 }
 
 export class ArenaView {
@@ -220,6 +222,7 @@ export class ArenaView {
       late: [],
       glideMs: 140,
       restMs: 0,
+      arrivedAt: -1,
     };
     this.enterBeat(0);
   }
@@ -256,6 +259,7 @@ export class ArenaView {
       sim.glideMs = clamp(Math.hypot(sim.ballFrom.x - a.x, sim.ballFrom.y - a.y) * 35, 140, 800);
       // Out over the touchline: it lies still for a beat (0.1 to 0.3s) so the throw-in does not look like a snap-back.
       const out = (sim.ballFrom.y < 0 || sim.ballFrom.y > WIDTH_M) && prev?.ball.k !== "held";
+      sim.arrivedAt = -1;
       sim.restMs = out ? 100 + hash01(beat.ball.by, i) * 200 : 0;
     }
     for (const id of Object.keys(sim.agents)) {
@@ -303,6 +307,15 @@ export class ArenaView {
       const tgt = beat.to[id];
       let tx = tgt.x;
       let ty = tgt.y * WIDTH_M;
+      // The player sent for a ball that is out of bounds runs to where it actually lies, not where the script guessed.
+      const nextBall = this.sim!.beat + 1 < this.scene!.beats.length ? this.scene!.beats[this.sim!.beat + 1].ball : null;
+      const fetching =
+        (beat.ball.k !== "held" && (sim.ball.y < 0 || sim.ball.y > WIDTH_M) && nextBall?.k === "held" && nextBall.by === id) ||
+        (beat.ball.k === "held" && beat.ball.by === id && sim.restMs > 0 && sim.arrivedAt < 0);
+      if (fetching) {
+        tx = sim.ball.x;
+        ty = sim.ball.y;
+      }
       // Tacklers chase the runner they are meant to hit and the runner keeps running until it happens.
       const chase = pending.find((h) => h.hit.other === id);
       const running = pending.find((h) => h.hit.runner === id);
@@ -514,16 +527,27 @@ export class ArenaView {
     switch (b.k) {
       case "held": {
         const a = sim.agents[b.by];
-        if (since < sim.restMs) {
-          // Resting out of bounds: stays down, then trembles harder as someone gets a hand to it and lifts it.
-          const r = since / sim.restMs;
+        // A ball resting out of bounds stays put until the player sent for it actually gets there.
+        let t = since;
+        if (sim.restMs > 0) {
+          if (sim.arrivedAt < 0 && Math.hypot(a.x - from.x, a.y - from.y) < 1.3) sim.arrivedAt = since;
+          if (sim.arrivedAt < 0) {
+            ball.x = from.x;
+            ball.y = from.y;
+            break;
+          }
+          t = since - sim.arrivedAt;
+        }
+        if (t < sim.restMs) {
+          // Stays down for a moment, then trembles harder as he gets a hand to it and lifts it.
+          const r = t / sim.restMs;
           const shake = Math.max(0, r - 0.35) / 0.65;
           ball.x = from.x + Math.sin(since * 0.09) * 0.25 * shake;
           ball.y = from.y + Math.cos(since * 0.13) * 0.18 * shake;
           ball.z = 0.25 * shake * shake;
           break;
         }
-        const k = Math.min(1, (since - sim.restMs) / sim.glideMs); // glide into the hands rather than jump
+        const k = Math.min(1, (t - sim.restMs) / sim.glideMs); // glide into the hands rather than jump
         const zFrom = sim.restMs > 0 ? 0.25 : ball.z;
         ball.x = lerp(from.x, a.x + a.hx * 1.1, k);
         ball.y = lerp(from.y, a.y + a.hy * 1.1, k);

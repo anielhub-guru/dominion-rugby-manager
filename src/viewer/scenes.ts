@@ -134,8 +134,11 @@ class SceneBuilder {
  * the mark, the lines form up and he throws it in to a jumper. `form` sets the line-out shape, including the mark.
  */
 function lineOut(sb: SceneBuilder, out: Pt, thrower: string, jumper: string, form: (p: Pos) => void) {
-  sb.go(650, (p) => { p[thrower] = { x: out.x, y: out.y - 0.02 }; }, { k: "at", p: out }, { cap: "The ball is out of play: a defender jogs over to fetch it" });
-  sb.go(520, () => {}, { k: "held", by: thrower });
+  // Long enough for him to actually get there: the ball waits for him, he does not wait for the ball.
+  const from = sb.pos[thrower];
+  const run = Math.hypot(out.x + 1.2 - from.x, (out.y + 0.01 - from.y) * 40);
+  sb.go(clamp(600 + (run / 11) * 1000, 1000, 3200), (p) => { p[thrower] = { x: out.x + 1.2, y: out.y + 0.01 }; }, { k: "fly", from: out, to: { x: out.x + 1.2, y: out.y + 0.03 }, arc: 5, style: "loose" }, { cap: "The ball is out of play: a defender jogs over to fetch it" });
+  sb.go(800, () => {}, { k: "held", by: thrower });
   sb.go(800, form, { k: "held", by: thrower }, { banner: { text: "LINE-OUT", color: AMBER, sub: "Defence throws in" }, cap: "Line-out: back to the mark, and the lines form up" });
   sb.go(600, () => {}, { k: "pass", from: thrower, to: jumper, arc: 14 }, { cap: "Thrown in straight down the line" });
   sb.go(550, () => {}, { k: "held", by: jumper });
