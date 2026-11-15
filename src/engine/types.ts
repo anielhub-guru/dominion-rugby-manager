@@ -33,6 +33,8 @@ export interface Player {
   tired?: number;
   /** Matches still to miss after a red card (0 or missing = available). */
   ban?: number;
+  /** An injury that keeps the player out of the next `games` matches. Healed over the offseason. Missing = fit. */
+  injury?: { label: string; games: number };
   /** Ceiling for overall rating. Growth and training stop here. Missing on very old saves until migrated. */
   potential?: number;
   /** Noisy scouting estimate of potential, set on prospects so the true value stays hidden until signed. */
@@ -79,6 +81,7 @@ export type EventType =
   | "penalty-miss"
   | "yellow"
   | "red"
+  | "injury"
   | "return"
   | "drop-goal"
   | "drop-miss"
@@ -173,6 +176,26 @@ export interface PlayerLine extends PlayerTotals {
   team: 0 | 1;
 }
 
+/** A player hurt in a match. `games` is how many matches they then miss (0 = a knock that only ends their match). */
+export interface InjuryReport {
+  id: string;
+  name: string;
+  /** 0 = home, 1 = away. */
+  team: 0 | 1;
+  label: string;
+  games: number;
+}
+
+/** A suspension handed out in a match: a second yellow, or a straight red for an offence. */
+export interface BanReport {
+  id: string;
+  name: string;
+  team: 0 | 1;
+  /** What it was for, e.g. "a swinging elbow". */
+  offence: string;
+  matches: number;
+}
+
 export interface MatchLog {
   id: string;
   season: number;
@@ -195,4 +218,10 @@ export interface MatchLog {
   load?: Record<string, number>;
   /** The sky the match was played under (cosmetic). Missing on older logs, which count as clear. */
   weather?: Weather;
+  /** True when the managed club played its rival. Missing on older logs. */
+  derby?: boolean;
+  /** Players hurt in this match. Missing on older logs. */
+  injuries?: InjuryReport[];
+  /** Suspensions handed out in this match. Missing on older logs, where every red meant one match. */
+  bans?: BanReport[];
 }

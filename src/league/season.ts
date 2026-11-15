@@ -1,12 +1,13 @@
 import { hashSeed, Rng } from "../engine/rng";
 import { MatchSim, RED_BAN, SHAPE_BY_STYLE, attackFit, slotPlayer } from "../engine/match";
+import { matchesText } from "../engine/injury";
 import { STAT_KEYS, emptyTotals, ROLES, type Attr, type Gender, type MatchLog, type Player, type PlayerTotals, type Role, type ShapeId, type TacticId, type Team } from "../engine/types";
 import { describeLine, impact, playerOfTheMatch } from "./awards";
 import { buildSchedule, type Fixture } from "./schedule";
 import { heavyNotes, heaviestDefeat, mergeNotes, recordMeeting, rivalNotes, rivalOf, type Rivalry } from "./rivals";
 import { computeStandings, standingsAt } from "./standings";
 import { defaultLeagueRecords, recordMatch, recordRetirement, recordSeasonEnd, type Legend, type LeagueRecords } from "./history";
-import { BONUS_FLAVOUR, MATCH_PAY, MAX_BUYS, MONEY_START, fmtMoney, goalBonus, goalResult, playerValue, prizeFor, sellPrice, teenSalePrice, wageOf } from "./economy";
+import { BONUS_FLAVOUR, MATCH_PAY, earnsSquadSlot, MAX_BUYS, MONEY_START, fmtMoney, goalBonus, goalResult, playerValue, prizeFor, sellPrice, teenSalePrice, wageOf } from "./economy";
 import { RESERVE_COUNT, evolvePlayers, playShare, generateTeams, makeReserves, initialPotential, makeProspects, objectiveTarget, overall, teamRating } from "./teams";
 
 export { describeLine, impact };
@@ -14,6 +15,10 @@ export { describeLine, impact };
 export const SAVE_VERSION = 9;
 /** Five starters, three bench, two reserves. */
 export const SQUAD_SIZE = 10;
+/** Extra squad places a club can earn (see economy.ts earnsSquadSlot). They are depth: extra reserves, outside the matchday eight. */
+export const MAX_EXTRA_SLOTS = 2;
+/** The most players the manager's club may hold. */
+export const squadCapacity = (s: { extraSlots?: number }) => SQUAD_SIZE + Math.min(MAX_EXTRA_SLOTS, s.extraSlots ?? 0);
 
 export type TrainingFocus = "attack" | "defence" | "kicking" | "fitness";
 export const TRAINING: Record<TrainingFocus, { label: string; description: string; attrs: Attr[] }> = {
@@ -131,6 +136,8 @@ export interface SeasonState {
   records: LeagueRecords;
   /** Long-serving players who have retired, by the club they retired from. */
   legends: Record<string, Legend[]>;
+  /** Extra squad places earned at the club you manage, on top of SQUAD_SIZE. Lost if you move to another club. */
+  extraSlots?: number;
 }
 
 /** Upgrades a saved season from an older version, or returns null if it cannot be upgraded. */
@@ -238,6 +245,8 @@ export function buildSim(s: SeasonState, f: Fixture, live = false): MatchSim {
     homeAuto: !(live && home.id === s.managedId),
     awayAuto: !(live && away.id === s.managedId),
     ...(notes ? { rival: notes } : {}),
+    // Your rival's fixtures are derbies: hotter, and form counts for less. The heavy-defeat rematch is only a story.
+    ...(opp && opp === rival ? { derby: true } : {}),
     seed: hashSeed(s.seed, s.season, f.id),
   });
 }
@@ -359,25 +368,27 @@ const slotScore = (p: Player, slot: Role) => {
 
 /**
  * Picks the best squad from current form: starters by fit and freshness, then the three best of the
- * rest on the bench and the remaining two as reserves. Suspended players go last, to the reserves.
+ * rest on the bench and the remaining players as reserves. Suspended and injured players go last, to the reserves.
  */
 export function autoSelect(team: Team): { lineup: string[]; reserves: string[] } {
   const used = new Set<string>();
   const lineup = ROLES.map((slot) => {
     const pool = team.players.filter((p) => !used.has(p.id));
-    const best = pool.filter((p) => !isSuspended(p)).sort((a, b) => slotScore(b, slot) - slotScore(a, slot))[0] ?? pool[0];
+    const best = pool.filter((p) => !isOut(p)).sort((a, b) => slotScore(b, slot) - slotScore(a, slot))[0] ?? pool[0];
     used.add(best.id);
     return best.id;
   });
   const rest = team.players
     .filter((p) => !used.has(p.id))
-    .sort((a, b) => Number(isSuspended(a)) - Number(isSuspended(b)) || overall(b) * (1 - (b.tired ?? 0) / 700) - overall(a) * (1 - (a.tired ?? 0) / 700));
-  return { lineup, reserves: rest.slice(rest.length - RESERVE_COUNT).map((p) => p.id) };
+    .sort((a, b) => Number(isOut(a)) - Number(isOut(b)) || overall(b) * (1 - (b.tired ?? 0) / 700) - overall(a) * (1 - (a.tired ?? 0) / 700));
+  // The bench is three; everyone beyond the matchday eight is a reserve, so an extra squad place adds a reserve.
+  const reserves = Math.max(RESERVE_COUNT, team.players.length - 8);
+  return { lineup, reserves: rest.slice(rest.length - reserves).map((p) => p.id) };
 }
 
 export function aiRest(club: Team) {
   const score = slotScore;
-  const free = club.players.filter((p) => !isSuspended(p) && !club.reserves?.includes(p.id));
+  const free = club.players.filter((p) => !isOut(p) && !club.reserves?.includes(p.id));
   const used = new Set<string>();
   const next = ROLES.map((slot, i) => {
     const pick = free.filter((p) => !used.has(p.id)).sort((a, b) => score(b, slot) - score(a, slot))[0];
@@ -389,31 +400,49 @@ export function aiRest(club: Team) {
 }
 
 export const isSuspended = (p: { ban?: number }) => (p.ban ?? 0) > 0;
+export const isInjured = (p: { injury?: { games: number } }) => (p.injury?.games ?? 0) > 0;
+/** Cannot play the next match: suspended or injured. */
+export const isOut = (p: { ban?: number; injury?: { games: number } }) => isSuspended(p) || isInjured(p);
 
 /** Best fit for a slot from players who are free to play: same natural role first, then overall rating. */
 export function bestReplacement(team: Team, slot: Role, exclude: Set<string>) {
   return team.players
-    .filter((p) => !exclude.has(p.id) && !isSuspended(p) && !team.reserves?.includes(p.id))
+    .filter((p) => !exclude.has(p.id) && !isOut(p) && !team.reserves?.includes(p.id))
     .sort((a, b) => Number(b.role === slot) - Number(a.role === slot) || overall(b) - overall(a))[0];
 }
 
 /**
- * Adds the matchday's player stats to the season, serves bans, and applies new ones.
- * Bans are decremented before new red cards are applied, so a player sent off on matchday N
- * misses matchday N+1 and is available again on N+2.
+ * Adds the matchday's player stats to the season, serves bans and injuries, and applies new ones.
+ * They are counted down before new ones are applied, so a player sent off on matchday N with a
+ * one-match ban misses matchday N+1 and is available again on N+2.
  */
 function recordPlayers(state: SeasonState, logs: MatchLog[]): string[] {
   const news: string[] = [];
   const everyone = new Map(state.teams.flatMap((t) => t.players.map((p) => [p.id, { p, t }] as const)));
-  for (const { p } of everyone.values()) if ((p.ban ?? 0) > 0) p.ban = (p.ban ?? 0) - 1;
+  for (const { p } of everyone.values()) {
+    if ((p.ban ?? 0) > 0) p.ban = (p.ban ?? 0) - 1;
+    if (p.injury) {
+      p.injury.games--;
+      if (p.injury.games <= 0) delete p.injury;
+    }
+  }
+  const banned: { id: string; name: string; offence: string; matches: number }[] = [];
   for (const log of logs) {
     for (const l of log.players ?? []) {
       const tot = (state.seasonStats[l.id] ??= emptyTotals());
       for (const k of STAT_KEYS) tot[k] += l[k];
       if (l.reds > 0) {
+        // Logs from before ban lengths existed carry no details: every red was one match.
+        const b = log.bans?.find((x) => x.id === l.id);
         const who = everyone.get(l.id);
-        if (who) who.p.ban = RED_BAN;
+        if (who) who.p.ban = b?.matches ?? RED_BAN;
+        if (b) banned.push(b);
       }
+    }
+    for (const i of log.injuries ?? []) {
+      if (i.games <= 0) continue; // a knock only ended that match
+      const who = everyone.get(i.id);
+      if (who) who.p.injury = { label: i.label, games: i.games };
     }
   }
   const mine = logs.find((l) => l.homeId === state.managedId || l.awayId === state.managedId);
@@ -423,18 +452,23 @@ function recordPlayers(state: SeasonState, logs: MatchLog[]): string[] {
     const star = [...lines].sort((a, b) => impact(b) - impact(a))[0];
     if (star && impact(star) > 3) news.push(`Standout: ${star.name} (${describeLine(star)}).`);
     for (const l of lines) {
-      if (l.reds > 0) news.push(`${l.name} was sent off and is suspended for your next match.`);
+      const ban = banned.find((b) => b.id === l.id);
+      if (l.reds > 0) news.push(ban && ban.matches > 1 ? `${l.name} was sent off for ${ban.offence} and is banned for ${matchesText(ban.matches)}.` : `${l.name} was sent off and is suspended for your next match.`);
       else if (l.yellows > 0) news.push(`${l.name} spent time in the sin bin.`);
     }
+    for (const i of mine.injuries ?? []) {
+      if (!team.players.some((p) => p.id === i.id)) continue;
+      news.push(i.games > 0 ? `${i.name} is injured (${i.label.toLowerCase()}) and will miss ${matchesText(i.games)}.` : `${i.name} took a knock (${i.label.toLowerCase()}) and came off, but should be fine for the next match.`);
+    }
   }
-  // Keep the manager's starting five legal: replace any suspended starter with the best available player.
+  // Keep the manager's starting five legal: replace any suspended or injured starter with the best available player.
   for (let i = 0; i < ROLES.length; i++) {
     const cur = team.players.find((p) => p.id === team.lineup[i]);
-    if (!cur || !isSuspended(cur)) continue;
+    if (!cur || !isOut(cur)) continue;
     const rep = bestReplacement(team, ROLES[i], new Set(team.lineup));
     if (!rep) continue;
     team.lineup[i] = rep.id;
-    news.push(`${cur.name} is suspended, so ${rep.name} comes into the starting five at ${ROLES[i]}.`);
+    news.push(`${cur.name} is ${isSuspended(cur) ? "suspended" : "injured"}, so ${rep.name} comes into the starting five at ${ROLES[i]}.`);
   }
   return news;
 }
@@ -528,7 +562,10 @@ export function startNextSeason(prev: SeasonState): SeasonState {
   const matches = state.totalMatchdays;
   state.seasonStats = {};
   state.trainGains = {};
-  for (const t of state.teams) for (const p of t.players) delete p.tired;
+  for (const t of state.teams) for (const p of t.players) {
+    delete p.tired;
+    delete p.injury; // the offseason heals everyone; bans still carry over
+  }
   const news: string[] = [];
   const lastSeason = state.season;
   // Season finances: prize money for the finishing position, less the wage bill.
@@ -542,6 +579,10 @@ export function startNextSeason(prev: SeasonState): SeasonState {
     state.money += bonus;
     const line = new Rng(hashSeed(state.seed, state.season, "bonus")).pick(BONUS_FLAVOUR[result]);
     news.push(`${result === "smashed" ? "Goal smashed" : "Goal achieved"} (${goal.text.toLowerCase()}): bonus ${fmtMoney(bonus)}. ${line} Balance ${fmtMoney(state.money)}.`);
+  }
+  if (earnsSquadSlot(finish, result) && (state.extraSlots ?? 0) < MAX_EXTRA_SLOTS) {
+    state.extraSlots = (state.extraSlots ?? 0) + 1;
+    news.push(`${finish === 1 ? "Champions" : "Beyond expectations"}: the board funds an extra squad place. You can now carry ${squadCapacity(state)} players, as extra depth for injuries and bans.`);
   }
   state.season++;
   const retirees = evolvePlayers(state.teams, hashSeed(state.seed, state.season), (id) => playShare(played[id]?.apps ?? 0, matches));
@@ -621,8 +662,10 @@ function replacePlayer(team: Team, oldId: string, next: Player) {
 export interface PlanCheck {
   ok: boolean;
   problems: string[];
-  /** Squad size after the plan. It must be SQUAD_SIZE. */
+  /** Squad size after the plan. It must be from SQUAD_SIZE up to `capacity`. */
   size: number;
+  /** The most players the squad may hold: SQUAD_SIZE plus any extra places earned. */
+  capacity: number;
   sellIncome: number;
   teenIncome: number;
   buyCost: number;
@@ -646,7 +689,8 @@ export function checkPlan(s: SeasonState, plan: OffseasonPlan): PlanCheck {
   if (signed.some((x) => !x) || bought.some((x) => !x)) problems.push("Someone you chose is no longer on offer.");
   const roster = [...keep, ...signed.filter((x): x is Player => !!x), ...bought.filter((x): x is Listing => !!x).map((l) => l.player)];
   if (plan.buy.length > MAX_BUYS) problems.push(`You can make at most ${MAX_BUYS} transfer signings per offseason.`);
-  if (roster.length !== SQUAD_SIZE) problems.push(`Your squad must have ${SQUAD_SIZE} players (it would have ${roster.length}).`);
+  const capacity = squadCapacity(s);
+  if (roster.length < SQUAD_SIZE || roster.length > capacity) problems.push(capacity > SQUAD_SIZE ? `Your squad must have ${SQUAD_SIZE} to ${capacity} players (it would have ${roster.length}).` : `Your squad must have ${SQUAD_SIZE} players (it would have ${roster.length}).`);
   for (const role of ROLES) if (!roster.some((p) => p.role === role)) problems.push(`You need at least one natural ${role}.`);
   const sellIncome = team.players.filter((p) => sell.has(p.id)).reduce((t, p) => t + sellPrice(p), 0);
   const unsigned = intake.prospects.filter((p) => !plan.sign.includes(p.id));
@@ -655,7 +699,7 @@ export function checkPlan(s: SeasonState, plan: OffseasonPlan): PlanCheck {
   const moneyAfter = s.money + sellIncome + teenIncome - buyCost;
   // Debt never blocks the season (you can always refill the squad for free), it only stops you buying.
   if (buyCost > 0 && moneyAfter < 0) problems.push(`You cannot afford this: the balance would be ${fmtMoney(moneyAfter)}.`);
-  return { ok: problems.length === 0, problems, size: roster.length, sellIncome, teenIncome, buyCost, moneyAfter, roster };
+  return { ok: problems.length === 0, problems, size: roster.length, capacity, sellIncome, teenIncome, buyCost, moneyAfter, roster };
 }
 
 /** A sensible default: the best scouted prospect for each retiree's position, no selling, no buying. */
@@ -671,6 +715,15 @@ export function autoPlan(s: SeasonState): OffseasonPlan {
       taken.add(best.id);
       plan.sign.push(best.id);
     }
+  }
+  // An earned extra place is filled with the best scouted prospect left, for the weakest position.
+  const spare = squadCapacity(s) - (team.players.length - s.intake.retiring.length + plan.sign.length);
+  for (let n = 0; n < spare; n++) {
+    const have = (role: Role) => team.players.filter((p) => p.role === role && !s.intake!.retiring.includes(p.id)).length + plan.sign.filter((id) => s.intake!.prospects.find((p) => p.id === id)?.role === role).length;
+    const best = s.intake.prospects.filter((p) => !taken.has(p.id)).sort((a, b) => have(a.role) - have(b.role) || (b.scouted ?? 0) - (a.scouted ?? 0))[0];
+    if (!best) break;
+    taken.add(best.id);
+    plan.sign.push(best.id);
   }
   return plan;
 }
@@ -739,9 +792,10 @@ export function completeOffseason(prev: SeasonState, plan: OffseasonPlan): Seaso
     used.add(rep.id);
     return rep.id;
   });
-  // Reserves who left are gone; top up to two with the weakest players outside the starting five.
+  // Reserves who left are gone; top up with the weakest players outside the starting five. Everyone beyond
+  // the matchday eight is a reserve, so an extra squad place means an extra reserve.
   team.reserves = (team.reserves ?? []).filter((id) => team.players.some((p) => p.id === id));
-  while (team.reserves.length < RESERVE_COUNT) {
+  while (team.reserves.length < Math.max(RESERVE_COUNT, team.players.length - 8)) {
     const next = team.players.filter((p) => !team.lineup.includes(p.id) && !team.reserves!.includes(p.id)).sort((a, b) => overall(a) - overall(b))[0];
     if (!next) break;
     team.reserves.push(next.id);
@@ -835,11 +889,20 @@ export function acceptOffer(prev: SeasonState, clubId: string): SeasonState {
     replacePlayer(old, r.id, best);
     delete state.careerStats[r.id];
   }
+  // AI clubs run a squad of ten: the extra places you earned go, and the weakest spare players are released.
+  while (old.players.length > SQUAD_SIZE) {
+    const spare = old.players.filter((p) => !old.lineup.includes(p.id)).sort((a, b) => overall(a) - overall(b))[0];
+    old.players = old.players.filter((p) => p.id !== spare.id);
+    old.reserves = (old.reserves ?? []).filter((id) => id !== spare.id);
+    delete state.careerStats[spare.id];
+  }
   const club = teamById(state, clubId);
   state.managedId = clubId;
   state.tactic = club.style;
   state.shape = SHAPE_BY_STYLE[club.style];
   state.money = offer.budget;
+  if (state.extraSlots) state.news = [{ season: state.season, matchday: 0, text: `The extra squad places you earned stay with ${old.name}: the spare players are released.` }, ...state.news];
+  delete state.extraSlots;
   state.trainGains = {};
   state.declinedTop = 0;
   delete state.offers;

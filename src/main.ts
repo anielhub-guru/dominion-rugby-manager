@@ -10,6 +10,8 @@ import {
   TRAINING,
   buildSim,
   careerLine,
+  isInjured,
+  isOut,
   isSeasonOver,
   isSuspended,
   managedFixture,
@@ -228,8 +230,8 @@ function swapPlayers(a: string, b: string) {
     const inB = team0.lineup.includes(b);
     const entering = inA && !inB ? b : inB && !inA ? a : null;
     const player = entering ? team0.players.find((x) => x.id === entering) : null;
-    if (player && isSuspended(player)) {
-      error = `${player.name} is suspended and cannot start the next match.`;
+    if (player && isOut(player)) {
+      error = isSuspended(player) ? `${player.name} is suspended and cannot start the next match.` : `${player.name} is injured (${player.injury!.label.toLowerCase()}) and cannot start the next match.`;
       render();
       return;
     }
@@ -335,7 +337,7 @@ function playerTable(team: Team, opts: { selectable?: boolean } = {}): HTMLEleme
     const shown = oop ? slotPlayer(p, slot as Player["role"]) : p;
     const tr = h("tr", { class: `${slot === "Bench" || slot === "Reserve" ? "bench" : "starter"} ${selectedPlayer === p.id ? "sel" : ""}` },
       h("td", { class: "slot" }, slot),
-      h("td", { class: "club" }, p.name, oop ? h("span", { class: "oop", title: "Out of position: -5 to every attribute" }, " ⚠ -5") : null, isSuspended(p) ? h("span", { class: "card-chip r", title: "Sent off in the last match: misses the next one" }, "SUSPENDED") : null, (p.tired ?? 0) >= 8 ? h("span", { class: "oop", title: `Tired from recent matches (${Math.round(p.tired!)}/100): starts the match slightly weaker and tires faster. High stamina recovers quicker. Rest a player to freshen them.` }, (p.tired ?? 0) >= 20 ? " ● Tired" : " ● Weary") : null, p.retiring ? h("span", { class: "card-chip r", title: "Retires when you confirm your offseason signings" }, "RETIRING") : null),
+      h("td", { class: "club" }, p.name, oop ? h("span", { class: "oop", title: "Out of position: -5 to every attribute" }, " ⚠ -5") : null, isSuspended(p) ? h("span", { class: "card-chip r", title: `Banned after a red card: misses the next ${p.ban === 1 ? "match" : `${p.ban} matches`}` }, p.ban! > 1 ? `BANNED ${p.ban}` : "SUSPENDED") : null, isInjured(p) ? h("span", { class: "card-chip y", title: `${p.injury!.label}: out for the next ${p.injury!.games === 1 ? "match" : `${p.injury!.games} matches`}. Healed over the offseason.` }, `INJURED ${p.injury!.games}`) : null, (p.tired ?? 0) >= 8 ? h("span", { class: "oop", title: `Tired from recent matches (${Math.round(p.tired!)}/100): starts the match slightly weaker and tires faster. High stamina recovers quicker. Rest a player to freshen them.` }, (p.tired ?? 0) >= 20 ? " ● Tired" : " ● Weary") : null, p.retiring ? h("span", { class: "card-chip r", title: "Retires when you confirm your offseason signings" }, "RETIRING") : null),
       h("td", {}, p.role),
       h("td", {}, String(p.age)),
       ...(showPot ? [h("td", { class: "stars", title: `Potential ${p.potential ?? "?"}` }, p.potential ? stars(p.potential) : "")] : []),
@@ -375,7 +377,7 @@ function statsTable(s: SeasonState, team: Team, rerender: () => void): HTMLEleme
     ["Tackles", "tackles", "Tackles made"],
     ["Turnovers", "turnovers", "Turnovers won (jackals and interceptions)"],
     ["YC", "yellows", "Yellow cards (10 minutes in the sin bin)"],
-    ["RC", "reds", "Red cards (sent off and suspended for a match)"],
+    ["RC", "reds", "Red cards (sent off and banned for one to five matches)"],
   ];
   const season = statsMode === "season";
   const toggle = h("div", { class: "toolbar" });
@@ -621,9 +623,9 @@ function offseasonView(s: SeasonState): HTMLElement {
   };
   const money = (label: string, v: number, sign = "") => h("span", { class: "dim" }, `${label} ${sign}${fmtMoney(v)}   `);
   const summary = h("div", { class: "advice" },
-    h("b", {}, `Squad ${check.size}/${SQUAD_SIZE}   `), money("Balance now", s.money), money("Unpicked prospects sold", check.teenIncome, "+"), money("Sales", check.sellIncome, "+"), money("Purchases", check.buyCost, "-"), h("b", {}, `Balance after ${fmtMoney(check.moneyAfter)}`));
+    h("b", {}, `Squad ${check.size}/${check.capacity}   `), money("Balance now", s.money), money("Unpicked prospects sold", check.teenIncome, "+"), money("Sales", check.sellIncome, "+"), money("Purchases", check.buyCost, "-"), h("b", {}, `Balance after ${fmtMoney(check.moneyAfter)}`));
   const top = card(`Season ${s.season}: offseason`,
-    h("p", { class: "dim" }, "Get the squad back to ten before the season starts. Prospects you do not sign are sold."),
+    h("p", { class: "dim" }, check.capacity > SQUAD_SIZE ? `Get the squad to between ${SQUAD_SIZE} and ${check.capacity} before the season starts. Your earned extra place${check.capacity - SQUAD_SIZE === 1 ? "" : "s"} can stay empty, but a bigger squad costs more in wages and gives you cover for injuries and bans. Prospects you do not sign are sold.` : "Get the squad back to ten before the season starts. Prospects you do not sign are sold."),
     summary,
     ...(check.problems.length ? [h("div", { class: "err" }, check.problems.join(" "))] : []),
     h("div", { class: "toolbar" }, confirm, reset));
@@ -792,6 +794,7 @@ function reviewCard(s: SeasonState, r: NonNullable<ReturnType<typeof reviewSeaso
     h("h2", { class: "sub" }, "Board goal"),
     h("div", { class: `goal-status ${r.goal.result === "missed" ? "bad" : "ok"}` }, goalLine),
     h("div", { class: "dim" }, r.goal.result === "missed" ? "No bonus this season." : `${r.goal.result === "smashed" ? "Beyond expectations" : "Goal met"}: ${fmtMoney(r.goal.bonus)} bonus from the board.`),
+    ...(r.squadSlot ? [h("div", { class: "goal-status ok" }, `★ ${r.championIsYou ? "Champions" : "Goal smashed"}: the board will fund an extra squad place when the new season starts.`)] : []),
     h("h2", { class: "sub" }, "Finances (paid when the new season starts)"),
     row(`Prize money (${ordinal(r.finish)})`, fmtMoney(r.money.prize)),
     row("Wage bill", fmtMoney(-r.money.wages)),
@@ -870,7 +873,7 @@ function squadView(s: SeasonState): HTMLElement {
   const team = teamById(s, s.managedId);
   const hint = selectedPlayer
     ? "Now click another player to swap places with them (or click the same player to cancel)."
-    : "Click a player, then click another, to swap them. Starters fill the five slots in order; bench players can replace any starter. The two reserves are outside the matchday eight: swap one in here between matches.";
+    : "Click a player, then click another, to swap them. Starters fill the five slots in order; bench players can replace any starter. The reserves are outside the matchday eight: swap one in here between matches, for example when a starter is injured or banned.";
 
   const autoBtn = h("button", { title: "Pick the best starters, bench and reserves from current ratings, tiredness and suspensions" }, "Auto select team");
   autoBtn.onclick = () => {
@@ -968,7 +971,7 @@ function squadView(s: SeasonState): HTMLElement {
     ),
     ...(profileCard ? [profileCard] : []),
     shapeCard,
-    card("Player stats", h("div", { class: "hint" }, "Hover a column heading to see what it counts. Yellow card: 10 minutes in the sin bin. Red card: off for the match and a one-match ban."), statsTable(s, team, render)),
+    card("Player stats", h("div", { class: "hint" }, "Hover a column heading to see what it counts. Yellow card: 10 minutes in the sin bin. Red card: off for the match, then a ban of one match (second yellow) or two to five (dangerous play)."), statsTable(s, team, render)),
     card("What the ratings mean (0-100, hover a column for the same tip)", h("div", { class: "legend" }, ...ATTRS.flatMap((a) => [h("b", {}, ATTR_INFO[a][0]), h("span", {}, ATTR_INFO[a][1])]))),
     card(
       "Your defensive shape",
@@ -1034,7 +1037,7 @@ function fixturesView(s: SeasonState): HTMLElement {
       if (mine) {
         const oppId = f.homeId === s.managedId ? f.awayId : f.homeId;
         const tags: HTMLElement[] = [];
-        if (oppId === rival) tags.push(h("span", { class: "rival-badge", title: "Your rival: the club you have the most history with" }, "RIVAL"));
+        if (oppId === rival) tags.push(h("span", { class: "rival-badge", title: "Your rival: the club you have the most history with. This match is a derby: form counts for less and tempers run higher, for both sides." }, "RIVAL · DERBY"));
         if (heavy && oppId === heavy.id) tags.push(h("span", { class: "rival-badge heavy", title: `This club beat you by ${heavy.by} points, your heaviest defeat` }, `LOST BY ${heavy.by}`));
         row.children[f.homeId === s.managedId ? 2 : 0].append(...tags);
       }

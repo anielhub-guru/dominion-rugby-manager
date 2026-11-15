@@ -55,6 +55,7 @@ const LABEL: Partial<Record<EventType, string>> = {
   talk: "TEAM TALK",
   yellow: "YELLOW CARD",
   red: "RED CARD",
+  injury: "INJURY",
   return: "BACK ON",
 };
 
@@ -75,6 +76,8 @@ export class LiveMatch {
   private cutaways: Cutaways;
   private fx: WeatherLayer;
   private weather: Weather | undefined;
+  /** The managed club is playing its rival. */
+  private derby = false;
   private opts: LiveOptions;
   private feed = h("div", { class: "feed" });
   private score = h("div", { class: "sb-score" }, "0 - 0");
@@ -119,13 +122,14 @@ export class LiveMatch {
   private talkBox: HTMLElement | null = null;
   private coverBox: HTMLElement | null = null;
   /** Players currently off the pitch, from the events seen so far (works for live matches and replays). */
-  private carded = new Map<string, { name: string; team: string; kind: "bin" | "off" }>();
+  private carded = new Map<string, { name: string; team: string; kind: "bin" | "off" | "hurt" }>();
   private discipline = h("div", { class: "discipline" });
 
   constructor(opts: LiveOptions) {
     this.opts = opts;
     this.arena = new ArenaView(opts.home.short, opts.away.short, teamColor(opts.home.id), teamColor(opts.away.id, "#f0b35a"));
     this.weather = opts.sim ? opts.sim.weather : opts.log?.weather;
+    this.derby = opts.sim ? opts.sim.derby : !!opts.log?.derby;
     this.fx = new WeatherLayer(this.weather ?? { id: "clear", wind: 0 });
     this.cutaways = new Cutaways({ home: opts.home, away: opts.away, stage: this.stage, arena: this.arena.canvas, rate: () => (this.paused ? 0 : this.speed) });
     if (opts.log) {
@@ -187,11 +191,11 @@ export class LiveMatch {
 
     const scoreboard = h("div", { class: "scoreboard" },
       tint(h("div", { class: "sb-team home" }, home.name), teamColor(home.id)),
-      h("div", { class: "sb-mid" }, this.score, this.clock, h("div", { class: "sb-bar" }, this.progress)),
+      h("div", { class: "sb-mid" }, this.score, this.clock, ...(this.derby ? [h("div", { class: "sb-derby", title: "A derby against your rival: form counts for less and tempers run higher, for both sides" }, "DERBY")] : []), h("div", { class: "sb-bar" }, this.progress)),
       tint(h("div", { class: "sb-team away" }, away.name), teamColor(away.id, "#f0b35a")));
 
     this.stage.append(this.arena.canvas, this.cutaways.layer, h("div", { class: "cm" }, this.cmTag, this.cmText), this.fx.canvas);
-    this.cmTag.textContent = this.weather && this.weather.id !== "clear" ? `MATCH CENTRE  ·  ${weatherLabel(this.weather).toUpperCase()}` : "MATCH CENTRE";
+    this.cmTag.textContent = ["MATCH CENTRE", ...(this.derby ? ["DERBY"] : []), ...(this.weather && this.weather.id !== "clear" ? [weatherLabel(this.weather).toUpperCase()] : [])].join("  ·  ");
     this.cmText.textContent = `${home.name} v ${away.name}`;
 
     const ms = this.opts.managedSide;
@@ -428,7 +432,7 @@ export class LiveMatch {
     await this.holdPrevious();
     if (this.disposed) return;
     this.reveal(ev);
-    if ((ev.type === "yellow" || ev.type === "red" || ev.type === "kickoff") && !this.skipping && this.cutaways.plan(ev)) await this.cardCutaway(ev);
+    if ((ev.type === "yellow" || ev.type === "red" || ev.type === "injury" || ev.type === "kickoff") && !this.skipping && this.cutaways.plan(ev)) await this.cardCutaway(ev);
     const sim = this.opts.sim;
     const ms = this.opts.managedSide;
     if (sim && ms !== undefined && (ev.type === "yellow" || ev.type === "red") && ev.team === ms) {
@@ -480,10 +484,15 @@ export class LiveMatch {
       const team = ev.team === 0 ? this.opts.home.short : this.opts.away.short;
       if (ev.type === "yellow") this.carded.set(ev.pid, { name: ev.player, team, kind: "bin" });
       else if (ev.type === "red") this.carded.set(ev.pid, { name: ev.player, team, kind: "off" });
+      else if (ev.type === "injury") this.carded.set(ev.pid, { name: ev.player, team, kind: "hurt" });
       else if (ev.type === "return") this.carded.delete(ev.pid);
       else return;
       this.discipline.replaceChildren(
-        ...[...this.carded.values()].map((c) => h("span", { class: `card-chip ${c.kind === "bin" ? "y" : "r"}`, title: c.kind === "bin" ? "In the sin bin for 10 minutes: this side plays a man down" : "Sent off for the rest of the match, and suspended for the next one" }, `${c.kind === "bin" ? "SIN BIN" : "SENT OFF"}: ${c.name} (${c.team})`)),
+        ...[...this.carded.values()].map((c) =>
+          c.kind === "hurt"
+            ? h("span", { class: "card-chip y", title: "Hurt and off for the rest of the match. Some injuries last into the next matches." }, `INJURED: ${c.name} (${c.team})`)
+            : h("span", { class: `card-chip ${c.kind === "bin" ? "y" : "r"}`, title: c.kind === "bin" ? "In the sin bin for 10 minutes: this side plays a man down" : "Sent off for the rest of the match, and banned for at least the next one" }, `${c.kind === "bin" ? "SIN BIN" : "SENT OFF"}: ${c.name} (${c.team})`),
+        ),
       );
       this.discipline.hidden = this.carded.size === 0;
     }

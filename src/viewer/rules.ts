@@ -1,6 +1,9 @@
 import { h } from "../dom";
 import { MATCH_PAY, MAX_BUYS, PRIZES, SELL_RATE, TEEN_RATE, fmtMoney } from "../league/economy";
-import { BIN_PHASES, MAX_SUBS, PHASES, RED_BAN, TACTICS, SHAPES } from "../engine/match";
+import { BIN_PHASES, MAX_SUBS, PHASES, TACTICS, SHAPES } from "../engine/match";
+import { MAX_INJURY_GAMES, OFFENCES } from "../engine/injury";
+import { DERBY } from "../engine/derby";
+import { MAX_EXTRA_SLOTS, SQUAD_SIZE } from "../league/season";
 
 /**
  * The rulebook. Everything here describes what the engine actually does, so the commentary,
@@ -142,9 +145,16 @@ const SECTIONS: Section[] = [
         [
           ["Yellow", `The player goes to the sin bin for ${minutes} minutes.`, "The team plays a man down until they come back. The commentary tells you when they return. A player in the sin bin cannot be substituted."],
           ["Second yellow", "A second yellow in the same match is a red.", "See red."],
-          ["Red", "The player is sent off for the rest of the match.", `The team plays a man down for the whole rest of the match, and the player is suspended for ${RED_BAN === 1 ? "the next match" : `the next ${RED_BAN} matches`}.`],
+          ["Red", "The player is sent off for the rest of the match.", "The team plays a man down for the whole rest of the match. After a second yellow the player misses the next match; after a straight red for dangerous play the ban is longer (see below)."],
         ],
       ),
+      h("h4", {}, "Dangerous play: longer bans"),
+      p("A straight red is for dangerous play, and the ban depends on what it was. They are rare."),
+      tbl(
+        ["Offence", "Ban"],
+        OFFENCES.map((o) => [o.label.replace(/^an? /, "").replace(/^./, (c) => c.toUpperCase()), `${o.matches} matches`]),
+      ),
+      p("A dangerous tackle on a runner can also hurt them: see Injuries."),
       h("h4", {}, "What being a man down does"),
       p("A team with a player off has a gap in its defence and one fewer runner. In practice the opposition gain more metres, break the line more often, and score more. Ten minutes in the sin bin can easily cost a try. A team is never reduced below three players on the pitch."),
       h("h4", {}, "What makes cards more likely"),
@@ -153,7 +163,28 @@ const SECTIONS: Section[] = [
         [b("Tired players."), " Players who are tired and have low Stamina mistime tackles. Substituting tired players, and training Fitness, lowers the risk."],
       ),
       h("h4", {}, "Suspensions"),
-      p("After a red card, the player misses the next matchday. If the player is in your starting five, the game replaces them with the best player available (the same natural position if possible) and tells you in the club news. You cannot put a suspended player in the starting five. Suspended players show a red SUSPENDED tag on the Squad tab. A ban carries over into a new season if it hasn't been served."),
+      p("After a second yellow the player misses the next matchday; after a straight red for dangerous play, two to five. If the player is in your starting five, the game replaces them with the best player available (the same natural position if possible) and tells you in the club news. You cannot put a suspended player in the starting five. Suspended players show a red SUSPENDED tag on the Squad tab. A ban carries over into a new season if it hasn't been served."),
+    ],
+  },
+  {
+    id: "injuries",
+    title: "Injuries and derbies",
+    body: () => [
+      p("Tackles can hurt people. Now and then the runner or the tackler is hurt, and a hard tackle (a line break) or a tired player makes it more likely. It is rare, and you will not see one every match."),
+      ul(
+        [b("They come off."), " The hurt player is replaced at once by the best player on your bench (a free substitution that does not use up one of your three). If there is nobody to bring on, you play a man short."],
+        [b("Some are only a knock."), " The player misses the rest of that match and is fine for the next one."],
+        [b("The worse ones last."), ` A hurt player can miss up to ${MAX_INJURY_GAMES} matches. No injury can end a season, and every injury heals in the offseason.`],
+        [b("Cover."), " An injured starter is replaced in your starting five, and you cannot pick an injured player. Keep a spare in each position, and use the reserves."],
+        [b("A dangerous tackle can injure."), " If a tackle on a runner is bad enough to be a red card, the runner is often badly hurt as well."],
+      ),
+      h("h4", {}, "Derbies"),
+      p("The club you have the most history with is your rival (see the club overview). Matches against them are derbies, marked on the fixture list and on the scoreboard, and they play differently, for both sides alike:"),
+      ul(
+        [b("Form counts for less."), ` The gap between the two teams shrinks by ${Math.round((1 - DERBY.gap) * 100)}%, so the underdog has a real chance and the favourite is not safe.`],
+        [b("Tempers run higher."), ` A penalty is ${Math.round((DERBY.card - 1) * 100)}% more likely to bring a card.`],
+        [b("The commentary notices."), " Expect the odd line about the crowd, the temperature and the bragging rights."],
+      ),
     ],
   },
   {
@@ -241,6 +272,7 @@ const SECTIONS: Section[] = [
       p("Every player has a hidden ", b("potential"), ": a ceiling on how good they can become. Players under 28 grow toward it, from 31 they fade (and their ceiling falls), and from 31 they can retire. Training can never lift a player past their potential."),
       h("h4", {}, "The offseason"),
       p("After matchday 14 and before the next season you have an offseason screen. Retirees leave, and you must refill your squad to ten (five starters, three on the bench and two reserves) with at least one natural player in each of the five positions. Beyond that, everything is optional."),
+      p(b("Extra squad places. "), `Win the league, or smash the board's goal, and the board funds one more place in your squad, up to ${MAX_EXTRA_SLOTS} extra (${SQUAD_SIZE + MAX_EXTRA_SLOTS} players). It is depth, not a sixth starter: extra players sit with the reserves, and are there for injuries and bans. You do not have to fill it, and a bigger squad costs more in wages. If you leave for another club, the places and the spare players stay behind.`),
       ul(
         [b("Youth shortlist."), " Teenage prospects, three for each position that lost a player and one for the others. Their rating is real but their potential is a scouting estimate (1 to 5 stars) that can be about a star out. Sign any of them, replacing anyone you choose."],
         [b("Selling."), " Sell any player who is not retiring. They go to another club and you get their sale price."],
@@ -273,7 +305,7 @@ const SECTIONS: Section[] = [
             ["Phase", "One action by the team with the ball. A match has 80."],
             ["Pressure bar", "How far up the arena your team has the ball."],
             ["Put-in", "The ball given to a team after the other side's error."],
-            ["Red card", "Sent off for the rest of the match and suspended for the next one."],
+            ["Red card", "Sent off for the rest of the match, and banned for one match (second yellow) or two to five (dangerous play)."],
             ["Set of six", "A team's allowance of six tackles before it must give up the ball."],
             ["Sin bin", `Where a yellow-carded player sits out ${minutes} minutes.`],
             ["Touch", "Out of play beyond the side line."],

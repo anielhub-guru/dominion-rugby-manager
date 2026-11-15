@@ -68,6 +68,9 @@ Win 4, draw 2, plus a bonus point for three or more tries and one for a close lo
 - **Live match view.** A running clock, commentary that avoids repeating itself, a pressure meter, and arena highlights for line breaks, kicks, tackles, turnovers and cards.
 - **Real coaching decisions.** Starting five and positions, four tactics, three defensive shapes, training focus, substitutions and half-time team talks.
 - **Discipline that matters.** Yellow cards send a player to the sin bin and reds mean a suspension. A side playing a man down concedes far more tries.
+- **Injuries and long bans.** Hard tackles can hurt players and keep them out for up to five matches. Dangerous play (a mistimed tackle, a high tackle, a swinging elbow, rarely a spear tackle) earns a straight red and a ban of two to five.
+- **Derbies.** Matches against your rival are hotter: form counts for less and tempers run higher, for both sides.
+- **Extra squad places.** Win the league or smash the board's goal and the board funds extra squad depth, up to twelve players.
 - **Careers and the offseason.** Hidden potential, growth, decline and retirement. Sell players, sign youth prospects, buy from the transfer list.
 - **Stats and awards.** Per-player season and career stats, a rated player of the match, and radar charts of the six ratings.
 - **Men's and women's leagues.** The same eight clubs with separate squads, generated Nigerian player names and matching commentary.

@@ -1,11 +1,11 @@
 import type { Player, PlayerLine } from "../engine/types";
 import { impact } from "./awards";
 import { RECORD_META, type ClubRecord, type RecordKey } from "./history";
-import { goalBonus, goalResult, prizeFor, wageOf, type GoalResult } from "./economy";
+import { earnsSquadSlot, goalBonus, goalResult, prizeFor, wageOf, type GoalResult } from "./economy";
 import { computeStandings } from "./standings";
 import { evolvePlayers, objectiveTarget, overall, playShare } from "./teams";
 import { hashSeed } from "../engine/rng";
-import { lastFinishHere, teamById, type SeasonState } from "./season";
+import { MAX_EXTRA_SLOTS, lastFinishHere, teamById, type SeasonState } from "./season";
 
 export interface ReviewMatch {
   opponent: string;
@@ -52,6 +52,8 @@ export interface SeasonReview {
   previousFinish?: number;
   record: { won: number; drawn: number; lost: number; pointsFor: number; pointsAgainst: number; triesFor: number; bonus: number; points: number };
   goal: { text: string; result: GoalResult; bonus: number };
+  /** The board funds an extra squad place for this finish (winning the league, or smashing the goal), if there is room for one. */
+  squadSlot: boolean;
   money: { prize: number; wages: number; bonus: number; net: number; balanceAfter: number };
   bestWin?: ReviewMatch;
   worstLoss?: ReviewMatch;
@@ -169,6 +171,7 @@ export function reviewSeason(s: SeasonState): SeasonReview | null {
     previousFinish,
     record: { won: row.won, drawn: row.drawn, lost: row.lost, pointsFor: row.pointsFor, pointsAgainst: row.pointsAgainst, triesFor: row.triesFor, bonus: row.bonus, points: row.points },
     goal: { text: g.text, result, bonus },
+    squadSlot: earnsSquadSlot(finish, result) && (s.extraSlots ?? 0) < MAX_EXTRA_SLOTS,
     money: { prize, wages, bonus, net: prize - wages + bonus, balanceAfter: s.money + prize - wages + bonus },
     bestWin,
     worstLoss,

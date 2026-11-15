@@ -5,8 +5,9 @@
  */
 
 export type Transition = "diagonal" | "split" | "hard" | "dots";
-export type Kind = "bighit" | "grounding" | "celebration" | "lastditch" | "jackal" | "card" | "waist" | "double" | "ankle" | "intercept" | "goalmiss" | "goal" | "kickchase" | "huddle" | "pass";
-export type StoryKind = Exclude<Kind, "bighit">;
+export type Kind = "bighit" | "grounding" | "celebration" | "lastditch" | "jackal" | "card" | "waist" | "double" | "ankle" | "intercept" | "goalmiss" | "goal" | "kickchase" | "huddle" | "pass" | "injury";
+/** Kinds drawn from the artwork in ./art. "injury" is a placeholder with no art yet (see the README). */
+export type StoryKind = Exclude<Kind, "bighit" | "injury">;
 
 /** Seconds, on the lab's scene clock: contact is when the cutaway pose begins, end is when it settles. */
 export const TIMING = {
@@ -50,6 +51,7 @@ export const CHANCE: Record<Kind, number> = {
   kickchase: 0.4,
   huddle: 0.7,
   pass: 0.5,
+  injury: 1,
 };
 
 /**

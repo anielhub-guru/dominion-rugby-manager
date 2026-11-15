@@ -2,8 +2,10 @@ import { Narrator, type CardFacts, type Facts } from "./commentary";
 import type { RivalNotes } from "../league/rivals";
 import { Rng, hashSeed } from "./rng";
 import { WeatherTalk, weatherFor, type Weather } from "./weather";
+import { DERBY, DerbyTalk } from "./derby";
+import { INJURY_RATE, SECOND_YELLOW, rollInjury, rollOffence } from "./injury";
 import { ROLES, emptyTotals } from "./types";
-import type { Attr, EventType, MatchEvent, MatchLog, Player, PlayerLine, Role, ShapeId, TacticId, Team, TeamStats } from "./types";
+import type { Attr, BanReport, EventType, InjuryReport, MatchEvent, MatchLog, Player, PlayerLine, Role, ShapeId, TacticId, Team, TeamStats } from "./types";
 
 /**
  * "Dominion": a rugby-inspired territory game, 5v5 on a 100m arena.
@@ -16,8 +18,12 @@ import type { Attr, EventType, MatchEvent, MatchLog, Player, PlayerLine, Role, S
  * Scoring: try 5, conversion 2, penalty goal 3, drop goal 3.
  *
  * Discipline: penalties can bring a yellow card (10 minutes in the sin bin, so the side
- * plays a man down) or a red card (off for the rest of the match, and a one-match ban).
- * A second yellow in the same match is a red.
+ * plays a man down) or a red card (off for the rest of the match). A second yellow in the same
+ * match is a red and a one-match ban; a straight red is for dangerous play (a mistimed tackle,
+ * a high tackle, a swinging elbow or, very rarely, a spear tackle) and carries a ban of 2 to 5 matches.
+ *
+ * Injuries: a tackle can hurt the carrier or the tackler. They come off (a free substitution) and the
+ * worse ones miss matches. Rare, and never longer than five matches.
  *
  * The engine is steppable (MatchSim.step) so a UI can play it live and let the
  * manager change tactics, substitute and give a half-time talk mid-match.
@@ -61,8 +67,8 @@ const stamNow = (p: Player) => p.stamina - tiredOf(p) * TIRED_STAMINA;
 export const OUT_OF_POSITION_PENALTY = 5;
 /** A sin bin lasts 10 minutes = 20 phases. */
 export const BIN_PHASES = 20;
-/** Matches a sent-off player misses. */
-export const RED_BAN = 1;
+/** Matches a player misses after a second yellow, or when a match log has no ban details (older saves). */
+export const RED_BAN = SECOND_YELLOW.matches;
 /** A side never drops below this many players on the pitch through cards. */
 const MIN_ON_PITCH = 3;
 
@@ -173,6 +179,8 @@ export interface MatchInput {
   awayAiSubs?: boolean;
   /** Set when the managed club is playing its rival or the club that holds its heaviest defeat. Only changes the wording. */
   rival?: RivalNotes;
+  /** The managed club is playing its rival: a hotter match (see derby.ts). Unlike `rival` this changes play, for both sides alike. */
+  derby?: boolean;
   seed: number;
 }
 
@@ -219,6 +227,8 @@ interface Side {
   sentOff: Set<string>;
   yellowCount: Map<string, number>;
   lines: Map<string, PlayerLine>;
+  /** Players who limped off and could not be replaced, so the side plays a man short. */
+  hurt: Set<string>;
 }
 
 const emptyStats = (): TeamStats => ({
@@ -260,7 +270,8 @@ function place(pos: number): string {
 }
 
 const ovr = (p: Player) => (p.power + p.pace + p.handling + p.tackling + p.kicking + p.stamina) / 6;
-const isBanned = (p: Player) => (p.ban ?? 0) > 0;
+/** Suspended or injured from an earlier match. */
+const isBanned = (p: Player) => (p.ban ?? 0) > 0 || (p.injury?.games ?? 0) > 0;
 
 /**
  * Builds the five on the pitch. A suspended starter is replaced by the best available
@@ -274,16 +285,19 @@ function makeSide(team: Team, tactic: TacticId, shape: ShapeId, auto: boolean, a
     return p;
   });
   const spare = team.players.filter((p) => !team.lineup.includes(p.id) && !team.reserves?.includes(p.id) && !isBanned(p));
+  // If the bench cannot cover every absence, a fit reserve steps in rather than someone who cannot play.
+  const cover = team.players.filter((p) => team.reserves?.includes(p.id) && !isBanned(p));
   const field = ROLES.map((slot, i) => {
     let p = starters[i];
-    if (isBanned(p) && spare.length) {
-      const best = [...spare].sort((a, b) => Number(b.role === slot) - Number(a.role === slot) || ovr(b) - ovr(a))[0];
-      spare.splice(spare.indexOf(best), 1);
+    const pool = spare.length ? spare : cover;
+    if (isBanned(p) && pool.length) {
+      const best = [...pool].sort((a, b) => Number(b.role === slot) - Number(a.role === slot) || ovr(b) - ovr(a))[0];
+      pool.splice(pool.indexOf(best), 1);
       p = best;
     }
     return slotPlayer(p, slot);
   });
-  const side: Side = { team, tactic, shape, auto, aiSubs, score: 0, stats: emptyStats(), field, bench: spare, entered: new Map(), left: new Map(), played: new Set(field.map((p) => p.id)), subs: 0, mod: { gain: 0, error: 0 }, bin: new Map(), sentOff: new Set(), yellowCount: new Map(), lines: new Map() };
+  const side: Side = { team, tactic, shape, auto, aiSubs, score: 0, stats: emptyStats(), field, bench: spare, entered: new Map(), left: new Map(), played: new Set(field.map((p) => p.id)), subs: 0, mod: { gain: 0, error: 0 }, bin: new Map(), sentOff: new Set(), yellowCount: new Map(), lines: new Map(), hurt: new Set() };
   return side;
 }
 
@@ -295,6 +309,14 @@ export class MatchSim {
   /** Cosmetic only: drawn over the match and mentioned in the commentary, never read by the match itself. */
   readonly weather: Weather;
   private weatherTalk: WeatherTalk;
+  private derbyTalk: DerbyTalk;
+  /** Injuries and the type of a dangerous red are rolled on their own streams, so nothing changes until one happens. */
+  private injuryRng: Rng;
+  private offenceRng: Rng;
+  /** Someone hurt in this phase; dealt with before the next one so the highlight that follows is not disturbed. */
+  private pendingHurt: { side: Side; player: Player; label: string; games: number } | null = null;
+  private injuries: InjuryReport[] = [];
+  private bans: BanReport[] = [];
   readonly sides: [Side, Side];
   private events: MatchEvent[] = [];
   private cursor = 0;
@@ -321,6 +343,9 @@ export class MatchSim {
     this.narrator = new Narrator(new Rng((input.seed ^ 0x9e3779b9) >>> 0));
     this.weather = weatherFor(input.id);
     this.weatherTalk = new WeatherTalk(this.weather, input.seed);
+    this.derbyTalk = new DerbyTalk(!!input.derby, input.seed);
+    this.injuryRng = new Rng(hashSeed(input.seed, "injury"));
+    this.offenceRng = new Rng(hashSeed(input.seed, "offence"));
     this.him = input.home.gender === "women" ? "her" : "him";
     this.sides = [
       makeSide(input.home, input.homeTactic, input.homeShape ?? SHAPE_BY_STYLE[input.homeTactic], !!input.homeAuto, !!input.homeAiSubs),
@@ -329,6 +354,11 @@ export class MatchSim {
     this.coaches = [makeCoach(input.seed, input.home.id), makeCoach(input.seed, input.away.id)];
     this.sides.forEach((s, i) => s.field.forEach((p) => this.line(s, i as 0 | 1, p)));
     this.emit("kickoff", `${input.home.name} get us under way against ${input.away.name}. The ball is in play at the Dominion Arena.${input.rival ? ` ${input.rival.kickoff}` : ""}`, true, 0);
+  }
+
+  /** True for a derby (the managed club against its rival). */
+  get derby(): boolean {
+    return !!this.input.derby;
   }
 
   get minute(): number {
@@ -402,10 +432,10 @@ export class MatchSim {
     return Math.round(clamp(100 * (1 - tiredOf(p) * 0.3 - (played / PHASES) * (1 - stamNow(p) / 100) * 1.5), 0, 100));
   }
 
-  /** Whether a player is in the sin bin (with minutes left) or sent off. */
+  /** Whether a player is in the sin bin (with minutes left), sent off, or hurt and unable to play on. */
   cardState(side: 0 | 1, p: Player): CardState {
     const s = this.sides[side];
-    if (s.sentOff.has(p.id)) return { kind: "off" };
+    if (s.sentOff.has(p.id) || s.hurt.has(p.id)) return { kind: "off" };
     const back = s.bin.get(p.id);
     return back === undefined ? null : { kind: "bin", minutesLeft: Math.max(1, Math.ceil((back - this.phase) / 2)) };
   }
@@ -446,13 +476,16 @@ export class MatchSim {
       players,
       load,
       weather: this.weather,
+      ...(this.input.derby ? { derby: true } : {}),
+      ...(this.injuries.length ? { injuries: this.injuries } : {}),
+      ...(this.bans.length ? { bans: this.bans } : {}),
     };
   }
 
   // ------------------------------------------------------------------ internals
 
   private isOff(s: Side, p: Player): boolean {
-    return s.sentOff.has(p.id) || s.bin.has(p.id);
+    return s.sentOff.has(p.id) || s.bin.has(p.id) || s.hurt.has(p.id);
   }
 
   /** Players actually on the pitch (not in the sin bin, not sent off). */
@@ -480,6 +513,8 @@ export class MatchSim {
   private emit(type: EventType, text: string, key: boolean, team?: 0 | 1, player?: string, x1?: number, info?: Info) {
     const remark = this.weatherTalk.remark(type, player);
     if (remark) text = `${text} ${remark}`;
+    const heat = this.derbyTalk.remark(type);
+    if (heat) text = `${text} ${heat}`;
     const offA = info?.hl && this.cA ? this.offSlots(this.cA) : [];
     const offD = info?.hl && this.cD ? this.offSlots(this.cD) : [];
     this.events.push({
@@ -530,6 +565,7 @@ export class MatchSim {
 
   private advance() {
     const { home, away } = this.input;
+    this.resolveInjury();
     if (this.phase >= PHASES) {
       const [h, a] = this.sides;
       const verdict = h.score === a.score ? "It finishes level" : `${h.score > a.score ? home.name : away.name} take the win`;
@@ -610,19 +646,19 @@ export class MatchSim {
    * (tired players mistime tackles), so the manager's choices change how often it happens.
    * A side never drops below three players on the pitch.
    */
-  private maybeCard(D: Side, culprit: Player, high: boolean) {
+  private maybeCard(D: Side, culprit: Player, high: boolean, victim?: Player) {
     const rng = this.rng;
     const idx: 0 | 1 = D === this.sides[0] ? 0 : 1;
     if (this.isOff(D, culprit) || this.avail(D).length <= MIN_ON_PITCH) return;
     const played = this.phase - (D.entered.get(culprit.id) ?? 0);
-    const risk = TACTICS[D.tactic].card * (1 + (played / PHASES) * (1 - stamNow(culprit) / 100) * 1.5);
+    const risk = TACTICS[D.tactic].card * (this.input.derby ? DERBY.card : 1) * (1 + (played / PHASES) * (1 - stamNow(culprit) / 100) * 1.5);
     const redP = clamp((high ? 0.09 : 0.012) * risk, 0, 0.5);
     const yellowP = clamp((high ? 0.3 : 0.16) * risk, 0, 0.9);
     const roll = rng.next();
     if (roll >= redP + yellowP) return;
     const l = this.lineOf(D, culprit);
     const prior = D.yellowCount.get(culprit.id) ?? 0;
-    if (roll < redP) return this.sendOff(D, idx, culprit, l, high, false);
+    if (roll < redP) return this.sendOff(D, idx, culprit, l, high, false, victim);
     D.yellowCount.set(culprit.id, prior + 1);
     D.stats.yellows = (D.stats.yellows ?? 0) + 1;
     l.yellows++;
@@ -634,14 +670,74 @@ export class MatchSim {
     this.autoCover(D, idx);
   }
 
-  private sendOff(D: Side, idx: 0 | 1, culprit: Player, l: PlayerLine, high: boolean, second: boolean) {
+  private sendOff(D: Side, idx: 0 | 1, culprit: Player, l: PlayerLine, high: boolean, second: boolean, victim?: Player) {
     D.bin.delete(culprit.id);
     D.sentOff.add(culprit.id);
     D.stats.reds = (D.stats.reds ?? 0) + 1;
     l.reds++;
     const c = this.cardFacts(D, culprit, high);
-    this.emit("red", second ? this.narrator.secondYellow(c) : this.narrator.red(c), true, idx, culprit.name, undefined, { pid: culprit.id });
+    if (second) {
+      this.bans.push({ id: culprit.id, name: culprit.name, team: idx, offence: SECOND_YELLOW.label, matches: SECOND_YELLOW.matches });
+      this.emit("red", this.narrator.secondYellow(c), true, idx, culprit.name, undefined, { pid: culprit.id });
+    } else {
+      // A straight red is for dangerous play, and the ban depends on what it was.
+      const offence = rollOffence(this.offenceRng, high);
+      c.offence = offence.label;
+      c.matches = offence.matches;
+      this.bans.push({ id: culprit.id, name: culprit.name, team: idx, offence: offence.label, matches: offence.matches });
+      this.emit("red", this.narrator.red(c), true, idx, culprit.name, undefined, { pid: culprit.id });
+      // A dangerous tackle on a runner often hurts them: a moderate injury at the least.
+      if (high && victim && this.injuryRng.chance(0.7)) {
+        const hurt = rollInjury(this.injuryRng, "moderate");
+        this.pendingHurt = { side: this.sides[idx === 0 ? 1 : 0], player: victim, label: hurt.label, games: hurt.games };
+      }
+    }
     this.autoCover(D, idx);
+  }
+
+  /**
+   * Each tackle may hurt the carrier or the tackler. Hard tackles (a line break) and tired legs make it
+   * likelier. It uses its own random stream, so a match with no injury is identical to one without the feature.
+   */
+  private checkInjury(A: Side, D: Side, carrier: Player, tackler: Player, hard: boolean) {
+    if (this.pendingHurt) return;
+    const rng = this.injuryRng;
+    const [side, victim] = rng.chance(0.65) ? [A, carrier] : [D, tackler];
+    const played = this.phase - (side.entered.get(victim.id) ?? 0);
+    const worn = tiredOf(victim) * 0.8 + (played / PHASES) * (1 - stamNow(victim) / 100);
+    if (!rng.chance(INJURY_RATE * (hard ? 2 : 1) * (1 + worn))) return;
+    const hurt = rollInjury(rng);
+    this.pendingHurt = { side, player: victim, label: hurt.label, games: hurt.games };
+  }
+
+  /**
+   * A hurt player comes off for the best bench player (a free substitution) and the injury is recorded.
+   * With nobody to bring on the side plays a man short, unless that would leave fewer than three.
+   */
+  private resolveInjury() {
+    const pend = this.pendingHurt;
+    if (!pend) return;
+    this.pendingHurt = null;
+    const { side, label, games } = pend;
+    const idx: 0 | 1 = side === this.sides[0] ? 0 : 1;
+    const slot = side.field.findIndex((p) => p.id === pend.player.id);
+    if (slot < 0 || this.isOff(side, side.field[slot])) return;
+    const out = side.field[slot];
+    const late = this.phase >= PHASES;
+    const incoming = late ? undefined : [...side.bench].sort((a, b) => Number(b.role === out.role) - Number(a.role === out.role) || ovr(b) - ovr(a))[0];
+    if (!late && !incoming && this.avail(side).length <= MIN_ON_PITCH) return; // nobody can leave: they play on
+    this.injuries.push({ id: out.id, name: out.name, team: idx, label, games });
+    if (incoming) {
+      side.field[slot] = slotPlayer(incoming, out.role);
+      side.bench.splice(side.bench.indexOf(incoming), 1);
+      side.entered.set(incoming.id, this.phase);
+      side.left.set(out.id, this.phase);
+      side.played.add(incoming.id);
+      this.line(side, idx, side.field[slot]);
+    } else if (!late) {
+      side.hurt.add(out.id);
+    }
+    this.emit("injury", this.narrator.injury({ player: out.name, team: side.team.short, label, games, by: incoming?.name, role: out.role, late }), true, idx, out.name, undefined, { pid: out.id });
   }
 
   private facts(A: Side, D: Side, extra: Partial<Facts> = {}): Facts {
@@ -649,7 +745,7 @@ export class MatchSim {
   }
 
   /** The defence has infringed: the attackers kick at goal if in range, otherwise kick to the corner. */
-  private awardPenalty(A: Side, D: Side, att: 0 | 1, culprit: Player, pos: number, high: boolean) {
+  private awardPenalty(A: Side, D: Side, att: 0 | 1, culprit: Player, pos: number, high: boolean, victim?: Player) {
     const rng = this.rng;
     const eA = (p: Player, k: Attr) => this.eff(A, p, k);
     D.stats.penaltiesConceded++;
@@ -677,7 +773,7 @@ export class MatchSim {
       this.tackles = 0;
       this.emit("penalty", this.narrator.penaltyCorner(this.facts(A, D, { ...base, where: place(this.pos) })), false, att);
     }
-    this.maybeCard(D, culprit, high);
+    this.maybeCard(D, culprit, high, victim);
   }
 
   /** The conversion kick after a try. */
@@ -866,7 +962,9 @@ export class MatchSim {
     const wide = carrier.role === "Winger";
     const dm = downD * dS.manDown; // the shape decides how badly a man down hurts
     const defRating = 0.5 * defAvg + 0.5 * (eD(tackler, "tackling") + dT.defence) - 5 * dm;
-    let gain = 8.5 + (atk - defRating) / 12 + tactGain + counter + A.mod.gain + 1.5 * dm - 1.2 * downA + (wide ? dS.wide : dS.mid) + rng.signed() * 8;
+    // In a derby form counts for less: the gap between the sides is shrunk, for the favourite and the underdog alike.
+    const gapScale = this.input.derby ? DERBY.gap : 1;
+    let gain = 8.5 + ((atk - defRating) / 12) * gapScale + tactGain + counter + A.mod.gain + 1.5 * dm - 1.2 * downA + (wide ? dS.wide : dS.mid) + rng.signed() * 8;
     let broke = false;
     let covered = false;
     const sweeper = dOn.find((p) => p.role === "Sweeper");
@@ -906,6 +1004,7 @@ export class MatchSim {
     D.stats.tackles++;
     this.lineOf(D, tackler).tackles++;
     this.tackles++;
+    this.checkInjury(A, D, carrier, tackler, broke);
     if (broke) {
       A.stats.lineBreaks++;
       cl.lineBreaks++;
@@ -939,7 +1038,7 @@ export class MatchSim {
         this.emit("break", this.narrator.breakEnd("foul", f), true, att, carrier.name, undefined, { hl: true, variant, ai, di: D.field.indexOf(tackler) });
         this.tackles = 0;
         this.x0 = absX(att, this.pos);
-        this.awardPenalty(A, D, att, tackler, this.pos, true);
+        this.awardPenalty(A, D, att, tackler, this.pos, true, carrier);
       } else if (variant === "covered") {
         this.emit("break", this.narrator.breakEnd("covered", { ...f, sweeper: sweeper!.name }), true, att, carrier.name, undefined, { hl: true, variant, ai, di: D.field.indexOf(sweeper!) });
       } else {

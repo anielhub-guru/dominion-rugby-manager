@@ -217,6 +217,8 @@ const YELLOW_REASON_HIGH = ["a high tackle", "a reckless tackle around the neck"
 const RED_REASON_HIGH = ["a dangerous high tackle", "serious foul play"];
 const RED_REASON_BREAKDOWN = ["serious foul play", "a dangerous challenge at the breakdown"];
 
+const withArticle = (label: string) => `${/^[aeiou]/i.test(label) ? "an" : "a"} ${label.toLowerCase()}`;
+
 export interface CardFacts {
   player: string;
   surname: string;
@@ -226,6 +228,9 @@ export interface CardFacts {
   high: boolean;
   /** Match minute at which a sin-binned player comes back. */
   backAt?: number;
+  /** For a red: what it was for ("a swinging elbow") and how many matches the ban lasts. */
+  offence?: string;
+  matches?: number;
 }
 
 export class Narrator {
@@ -314,10 +319,20 @@ export class Narrator {
     return `SECOND YELLOW! ${c.player} (${c.team}) has already been warned, and a second yellow means a red card. ${c.team} are down to ${c.left} for the rest of the match, and ${c.surname} will miss the next match.`;
   }
   red(c: CardFacts): string {
-    const reason = this.pick(c.high ? "rc-high" : "rc-breakdown", c.high ? RED_REASON_HIGH : RED_REASON_BREAKDOWN);
+    const reason = c.offence ?? this.pick(c.high ? "rc-high" : "rc-breakdown", c.high ? RED_REASON_HIGH : RED_REASON_BREAKDOWN);
+    const ban = c.matches && c.matches > 1 ? `${c.surname} faces a ban of ${c.matches} matches` : `${c.surname} will miss the next match`;
     return this.pick("rc", [
-      `RED CARD! ${c.player} (${c.team}) is sent off for ${reason}. ${c.team} play the rest of the match with ${c.left}, and ${c.surname} will miss the next match.`,
-      `Straight red for ${c.player} (${c.team}) for ${reason}! ${c.team} are down to ${c.left} for the rest of the match, and ${c.surname} is suspended for the next one.`,
+      `RED CARD! ${c.player} (${c.team}) is sent off for ${reason}. ${c.team} play the rest of the match with ${c.left}, and ${ban}.`,
+      `Straight red for ${c.player} (${c.team}) for ${reason}! ${c.team} are down to ${c.left} for the rest of the match, and ${ban}.`,
+    ]);
+  }
+  /** A player hurt in a tackle. `by` is who replaces them, if anyone could. */
+  injury(f: { player: string; team: string; label: string; games: number; by?: string; role: string; late?: boolean }): string {
+    const cover = f.late ? "" : f.by ? `${f.by} comes on for ${f.team} at ${f.role}.` : `${f.team} have nobody to bring on and play on a man short.`;
+    const outlook = f.games <= 0 ? "It is only a knock, but they cannot carry on." : f.games === 1 ? "They will miss the next match too." : `They will be out for ${f.games} matches.`;
+    return this.pick("inj", [
+      `INJURY! ${f.player} (${f.team}) is down and cannot continue: ${f.label.toLowerCase()}. ${outlook} ${cover}`.trim(),
+      `${f.player} (${f.team}) is hurt in that tackle and has to come off with ${withArticle(f.label)}. ${outlook} ${cover}`.trim(),
     ]);
   }
   back(player: string, team: string, count: number): string {

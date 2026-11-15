@@ -6,6 +6,34 @@ drift apart). It is shown in the app footer and on the new-game screen.
 
 ## Unreleased
 
+- Derbies. Your matches against your rival (the club you have the most history with) are now derbies: marked RIVAL ·
+  DERBY on the fixture list, with a DERBY badge on the scoreboard and match centre, and now and then a line of derby
+  commentary. They play differently, for both sides alike so they cannot be farmed: the gap between the two teams
+  shrinks by 20% (the underdog has a real chance, the favourite is not safe), and a penalty is 25% more likely to
+  bring a card. The match against the club that gave you your heaviest defeat is still only a story.
+- Injuries. Tackles can hurt the runner or the tackler, more often on hard tackles (line breaks) and on tired legs.
+  The hurt player comes off for the best player on the bench (a free substitution, it does not use one of the
+  three) and the commentary says what happened. About a third of injuries are only a knock; the rest keep the
+  player out for 1 to 5 matches (a sprained ankle, a torn calf, a dislocated shoulder). No injury can end a season,
+  and everyone heals over the offseason. An injured starter is replaced in your starting five with a note in the
+  club news, an injured player cannot be picked, and the Squad tab shows INJURED with the matches left. Rare: about
+  one lasting injury per club every season and a half. Injuries use their own random stream, so a match with none
+  plays out as it always did.
+- Longer bans for dangerous play. A straight red is now for a named offence, and the ban depends on it: a badly
+  mistimed tackle (2 matches), a dangerous high tackle (3), a swinging elbow (4) and, very rarely, a spear tackle (5).
+  A second yellow is still one match. The commentary names the offence and the ban, the club news says how long, and
+  the Squad tab shows BANNED with the matches left. A red for a dangerous tackle on a runner often injures the
+  runner too. Match logs record each ban; older saves and logs count every red as one match.
+- Extra squad places. Winning the league, or smashing the board's goal, now earns one more place in your squad on top
+  of the ten, up to two extra (twelve players). It is depth, not another starter: the extra players are reserves,
+  outside the matchday eight, for cover when someone is hurt or banned. You do not have to fill it and a bigger
+  squad costs more in wages. The season review announces it, the offseason accepts a squad of ten up to your
+  capacity, and the default plan fills it. If you move to another club the places stay behind and the club you leave
+  drops back to ten.
+- Injury cutaway (placeholder). An injury now triggers a cutaway in both leagues, drawn as a plain "PLAYER DOWN" card
+  with the player's name and a note that the art is still to be drawn. It is listed under "Art needed" in
+  `src/cutaways/README.md`, with how to replace it.
+
 - Weather. Each match now has a sky, picked from the match id so a replay shows the same weather: clear (about a third
   of matches), drizzle, rain, heavy rain, windy (dust and leaves blown across), harmattan haze (a dusty amber wash),
   sunny (a warm glow with soft rays) or hot (orange warmth and rising heat shimmer), with a wind direction. It is drawn

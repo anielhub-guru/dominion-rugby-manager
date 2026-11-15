@@ -190,14 +190,21 @@ describe("suspensions", () => {
         const red = reds[0];
         const team = s.teams.find((t) => t.players.some((p) => p.id === red.id))!;
         const player = team.players.find((p) => p.id === red.id)!;
-        expect(player.ban).toBe(1);
-        if (isSeasonOver(s)) continue;
-        // The following matchday: the banned player must not play for their club.
-        const next = playMatchday(s);
-        for (const log of next.logs) expect((log.players ?? []).some((x) => x.id === red.id)).toBe(false);
-        const after = next.state.teams.find((t) => t.id === team.id)!.players.find((p) => p.id === red.id)!;
-        expect(after.ban ?? 0).toBe(0);
+        // The ban is the length the match log recorded for this offence (one match for a second yellow).
+        const ban = r.logs.flatMap((l) => l.bans ?? []).find((b) => b.id === red.id)!;
+        expect(ban.matches).toBeGreaterThanOrEqual(1);
+        expect(ban.matches).toBeLessThanOrEqual(5);
+        expect(player.ban).toBe(ban.matches);
         if (team.id === "dun") expect(s.teams.find((t) => t.id === "dun")!.lineup).not.toContain(red.id);
+        // Every following matchday of the ban: the banned player must not play for their club.
+        let cur = s;
+        for (let k = 0; k < ban.matches && !isSeasonOver(cur); k++) {
+          const next = playMatchday(cur);
+          for (const log of next.logs) expect((log.players ?? []).some((x) => x.id === red.id)).toBe(false);
+          cur = next.state;
+          const left = cur.teams.find((t) => t.id === team.id)!.players.find((p) => p.id === red.id)!;
+          expect(left.ban ?? 0).toBe(ban.matches - 1 - k);
+        }
         void before;
         proved = true;
       }

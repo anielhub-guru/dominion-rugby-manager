@@ -27,7 +27,8 @@ describe("illustrated cutaways", () => {
     for (const [kind, chance] of Object.entries(CHANCE)) {
       expect(chance).toBeGreaterThan(0);
       expect(chance).toBeLessThanOrEqual(1);
-      expect(kind === "bighit" || kind in STORY).toBe(true);
+      // "injury" is a placeholder with no artwork yet, so it has no STORY entry.
+      expect(kind === "bighit" || kind === "injury" || kind in STORY).toBe(true);
     }
   });
 

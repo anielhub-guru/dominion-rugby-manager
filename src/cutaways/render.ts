@@ -19,6 +19,8 @@ export interface CutawayRequest {
   pose?: number;
   mode: Transition;
   shake: boolean;
+  /** Text for a placeholder cutaway, such as the injured player's name. */
+  note?: string;
 }
 
 // The cutaway is drawn in the lab's 960 x 430 space, below a 45px header strip we do not use.
@@ -379,7 +381,34 @@ export function drawFrame(ctx: CanvasRenderingContext2D, paint: Painter, field: 
 }
 
 /** Loads the artwork for a request and returns what is needed to draw it. Rejects if the art is missing. */
+/**
+ * PLACEHOLDER for the injury cutaway: there is no artwork for it yet. It shows the pitch with a plain
+ * card so the moment can be felt in play. Replace it with real art (see src/cutaways/README.md, "Art needed").
+ */
+async function injuryPlaceholder(req: CutawayRequest): Promise<Painter> {
+  return (ctx) => {
+    pitchBackdrop(ctx);
+    ctx.fillStyle = "rgba(10, 16, 12, 0.82)";
+    ctx.fillRect(170, 130, 620, 220);
+    ctx.strokeStyle = "#ff6b5e";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(170, 130, 620, 220);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ff6b5e";
+    ctx.font = "bold 44px sans-serif";
+    ctx.fillText("PLAYER DOWN", W / 2, 215);
+    ctx.fillStyle = INK;
+    ctx.font = "bold 30px sans-serif";
+    ctx.fillText(req.note ?? "", W / 2, 265);
+    ctx.fillStyle = "#9db3a2";
+    ctx.font = "italic 18px sans-serif";
+    ctx.fillText("Placeholder: injury cutaway art still to be drawn", W / 2, 320);
+    ctx.textAlign = "start";
+  };
+}
+
 export async function prepare(req: CutawayRequest): Promise<Painter> {
+  if (req.kind === "injury") return injuryPlaceholder(req);
   return req.kind === "bighit" ? bigHitPainter(req) : storyPainter(req.kind, req);
 }
 

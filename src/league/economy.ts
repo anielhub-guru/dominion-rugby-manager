@@ -84,3 +84,6 @@ export const BONUS_FLAVOUR = {
     "A season for the ages. The chairman weeps, hugs you twice and signs off a huge bonus.",
   ],
 };
+
+/** A permanent extra squad place is earned by winning the league or smashing the board's goal. */
+export const earnsSquadSlot = (finish: number, result: GoalResult) => finish === 1 || result === "smashed";

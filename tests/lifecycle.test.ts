@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SAVE_VERSION, autoPlan, checkPlan, completeOffseason, isSeasonOver, migrateSave, newGame, playMatchday, startNextSeason, teamById, type OffseasonPlan, type SeasonState } from "../src/league/season";
+import { SAVE_VERSION, autoPlan, checkPlan, completeOffseason, isSeasonOver, migrateSave, newGame, playMatchday, squadCapacity, startNextSeason, teamById, type OffseasonPlan, type SeasonState } from "../src/league/season";
 import { overall, potentialStars } from "../src/league/teams";
 import { MAX_BUYS, MONEY_START, playerValue, prizeFor, sellPrice, teenSalePrice } from "../src/league/economy";
 import { ROLES } from "../src/engine/types";
@@ -50,8 +50,10 @@ describe("player lifecycle", () => {
       s = completeOffseason(s, autoPlan(s));
       setBestLineup(s);
       for (const t of s.teams) {
-        expect(t.players).toHaveLength(10);
-        expect(new Set(t.players.map((p) => p.id)).size).toBe(10);
+        // AI clubs hold ten; the managed club holds up to ten plus any extra places it has earned.
+        expect(t.players).toHaveLength(t.id === s.managedId ? Math.max(10, t.players.length) : 10);
+        expect(t.players.length).toBeLessThanOrEqual(squadCapacity(s));
+        expect(new Set(t.players.map((p) => p.id)).size).toBe(t.players.length);
         expect(new Set(t.lineup).size).toBe(5);
         for (const id of t.lineup) expect(t.players.some((p) => p.id === id)).toBe(true);
       }

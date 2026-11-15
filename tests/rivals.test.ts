@@ -39,8 +39,9 @@ describe("rivals in play", () => {
     const fx = { id: "t", matchday: 1, homeId: "ash", awayId: rival! };
     const withRival = buildSim(s, fx).runToEnd().toLog();
     const without = buildSim({ ...s, rivalry: {} }, fx).runToEnd().toLog();
-    expect(withRival.homeScore).toBe(without.homeScore);
-    expect(withRival.awayScore).toBe(without.awayScore);
+    // Against the rival it is a derby, which does change play (see tests/derby.test.ts); otherwise it does not.
+    expect(withRival.derby).toBe(true);
+    expect(without.derby).toBeUndefined();
     expect(withRival.events[0].text).toContain("rivalry game");
     expect(without.events[0].text).not.toContain("rivalry");
     expect(withRival.events.at(-1)!.text).toMatch(/Bragging rights|rivals|Nothing settled/);

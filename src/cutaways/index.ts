@@ -43,6 +43,8 @@ export function kindsFor(ev: MatchEvent): Kind[] {
     case "yellow":
     case "red":
       return ["card"];
+    case "injury":
+      return ["injury"];
     case "try":
       return v === "power" || v === "break" ? ["grounding", "celebration"] : v === "grubber" || v === "chip" ? ["kickchase"] : [];
     case "kick":
@@ -130,8 +132,10 @@ export class Cutaways {
   /** Works out what to show for an event, or null for the usual presentation. */
   plan(ev: MatchEvent): CutawayRequest | null {
     const { home, away } = this.host;
-    if (this.settings.mode === "dots" || home.gender !== "women") return null;
+    if (this.settings.mode === "dots") return null;
     const kinds = kindsFor(ev);
+    // The injury cutaway is a placeholder with no artwork, so it shows in both leagues; every other kind is women's league art.
+    if (home.gender !== "women" && !kinds.includes("injury")) return null;
     const f = FREQUENCIES.find((x) => x.id === this.settings.freq) ?? FREQUENCIES[1];
     if (!kinds.length || this.shown >= f.max || secOf(ev) - this.lastSec < f.cooldown) return null;
     const kind = kinds[Math.floor(rand(ev, 43) * kinds.length)];
@@ -139,6 +143,9 @@ export class Cutaways {
 
     let a: Player | undefined;
     let b: Player | undefined;
+    if (kind === "injury") {
+      return { kind, a: { hair: 0, build: 1 }, mode: this.settings.mode, shake: false, note: ev.player };
+    }
     if (kind === "card") {
       a = this.player(ev.team === 0 ? home : away, { id: ev.pid });
     } else if (kind === "kickchase") {
