@@ -23,9 +23,9 @@ import type { Attr, EventType, MatchEvent, MatchLog, Player, PlayerLine, Role, S
  * manager change tactics, substitute and give a half-time talk mid-match.
  */
 export const PHASES = 80;
-/** How readily each tactic plays a grubber or a chip and chase near the line. */
 /** Chance that a territory kick which would run dead is instead a monster kick that scores. */
 const BOMB_CHANCE = 0.3;
+/** How readily each tactic plays a grubber or a chip and chase near the line. */
 const KICK_AHEAD: Record<TacticId, number> = { attacking: 1.5, balanced: 1, defensive: 0.5, territory: 1.2 };
 export const MAX_SUBS = 3;
 /** How hard fatigue cuts stats by full time: a stamina-60 player loses 0.4 * FATIGUE (about 26%). */
