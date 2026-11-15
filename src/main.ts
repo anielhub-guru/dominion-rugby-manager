@@ -1272,7 +1272,8 @@ function render() {
   const nav = h("nav");
   for (const [id, label] of TABS) {
     const [num, ...name] = label.split(" ");
-    const b = h("button", { class: id === tab ? "active" : "" }, name.join(" "), h("kbd", {}, num));
+    const waiting = id === "deals" ? (s.deals ?? []).filter((d) => d.status === "offered").length : 0;
+    const b = h("button", { class: id === tab ? "active" : "" }, name.join(" "), ...(waiting ? [h("span", { class: "bell", title: `${waiting} deal offer${waiting === 1 ? "" : "s"} waiting` }, "🔔")] : []), h("kbd", {}, num));
     b.onclick = () => {
       tab = id;
       selectedPlayer = null;
