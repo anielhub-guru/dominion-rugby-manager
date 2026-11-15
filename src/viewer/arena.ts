@@ -539,12 +539,12 @@ export class ArenaView {
           t = since - sim.arrivedAt;
         }
         if (t < sim.restMs) {
-          // Stays down for a moment, then trembles harder as he gets a hand to it and lifts it.
+          // Stays down for a moment, then lifts smoothly as if being picked up.
           const r = t / sim.restMs;
-          const shake = Math.max(0, r - 0.35) / 0.65;
-          ball.x = from.x + Math.sin(since * 0.09) * 0.25 * shake;
-          ball.y = from.y + Math.cos(since * 0.13) * 0.18 * shake;
-          ball.z = 0.25 * shake * shake;
+          const lift = Math.max(0, r - 0.35) / 0.65;
+          ball.x = from.x;
+          ball.y = from.y;
+          ball.z = 0.25 * lift * lift;
           break;
         }
         const k = Math.min(1, (t - sim.restMs) / sim.glideMs); // glide into the hands rather than jump
