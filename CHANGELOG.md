@@ -6,11 +6,13 @@ drift apart). It is shown in the app footer and on the new-game screen.
 
 ## Unreleased
 
-- Weather. Each match now has a sky (clear about 60% of the time, otherwise drizzle, rain or heavy rain, with a wind
-  direction), picked from the match id so a replay shows the same weather. Rain is drawn over the arena and the
-  illustrated cutaways, the match header names it, and the commentary mentions it at kick-off, half time and now and
-  then on knock-ons, kicks, tries and missed goal kicks. It is cosmetic: it never touches the match random stream, so
-  results are unchanged, and dry matches read exactly as before. Rain is skipped when the system asks for reduced motion.
+- Weather. Each match now has a sky, picked from the match id so a replay shows the same weather: clear (about a third
+  of matches), drizzle, rain, heavy rain, windy (dust and leaves blown across), harmattan haze (a dusty amber wash),
+  sunny (a warm glow with soft rays) or hot (orange warmth and rising heat shimmer), with a wind direction. It is drawn
+  over the arena and the illustrated cutaways, the match header names it, and the commentary mentions it at kick-off,
+  half time and now and then on knock-ons, kicks, tries and missed goal kicks. It is cosmetic: it never touches the
+  match random stream, so results are unchanged, and clear matches read exactly as before. It is skipped when the
+  system asks for reduced motion.
 - A frequency menu in the Cutaways control (Rare, Normal, Often, Lots) sets how likely each moment is to get a cutaway,
   how many play in a match and how far apart they are. Normal is the old behaviour; the choice is remembered.
 - Offseason screen redesign. The league table is gone from this screen. The recruitment advice now comes first, as
