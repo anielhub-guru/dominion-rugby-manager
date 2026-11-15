@@ -43,7 +43,8 @@ drift apart). It is shown in the app footer and on the new-game screen.
   over the arena and the illustrated cutaways, the match header names it, and the commentary mentions it at kick-off,
   half time and now and then on knock-ons, kicks, tries and missed goal kicks. It is cosmetic: it never touches the
   match random stream, so results are unchanged, and clear matches read exactly as before. It is skipped when the
-  system asks for reduced motion.
+  system asks for reduced motion. The Match Centre shows a one-line report under the fixture before kick-off
+  (for example "☀️ Sunny · 31°C · Light breeze").
 - A frequency menu in the Cutaways control (Rare, Normal, Often, Lots) sets how likely each moment is to get a cutaway,
   how many play in a match and how far apart they are. Often is the default and Normal is the old behaviour; the choice is remembered.
 - Offseason screen redesign. The league table is gone from this screen. The recruitment advice now comes first, as

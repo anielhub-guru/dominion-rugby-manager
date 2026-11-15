@@ -11,6 +11,8 @@ export interface Weather {
   id: WeatherId;
   /** Sideways drift of rain and dust, -1 (blowing left) to 1 (blowing right). */
   wind: number;
+  /** Temperature in °C, for the match report. Missing on logs saved before it existed. */
+  temp?: number;
 }
 
 /** How a sky is drawn: falling rain, dust and leaves blown sideways, a dusty haze with slow specks, a sunny glow, or heat shimmer. */
@@ -29,6 +31,20 @@ export const WEATHERS: Record<WeatherId, { label: string; odds: number; fx: Weat
 
 const ORDER: readonly WeatherId[] = ["clear", "drizzle", "rain", "storm", "windy", "harmattan", "sunny", "hot"];
 
+/** Daytime temperature range (°C) for each sky. */
+const TEMP: Record<WeatherId, readonly [number, number]> = {
+  clear: [25, 32],
+  drizzle: [22, 26],
+  rain: [21, 25],
+  storm: [20, 24],
+  windy: [25, 30],
+  harmattan: [27, 33],
+  sunny: [29, 34],
+  hot: [35, 40],
+};
+
+const ICON: Record<WeatherId, string> = { clear: "⛅", drizzle: "🌦", rain: "🌧", storm: "⛈", windy: "💨", harmattan: "🌫", sunny: "☀️", hot: "🌡" };
+
 export function weatherFor(matchId: string): Weather {
   const rng = new Rng(hashSeed(matchId, "weather"));
   let roll = rng.next();
@@ -41,7 +57,8 @@ export function weatherFor(matchId: string): Weather {
   let wind = id === "storm" ? rng.signed() * 1.6 : rng.signed();
   // A windy day always blows hard one way or the other.
   if (id === "windy") wind = (wind < 0 ? -1 : 1) * (0.6 + Math.abs(wind) * 0.4);
-  return { id, wind: Math.max(-1, Math.min(1, wind)) };
+  const [lo, hi] = TEMP[id];
+  return { id, wind: Math.max(-1, Math.min(1, wind)), temp: rng.int(lo, hi) };
 }
 
 export const isWet = (w: Weather | undefined): boolean => !!w && WEATHERS[w.id].fx === "rain";
@@ -150,3 +167,12 @@ export class WeatherTalk {
     return line.replace("${p}", player ?? "anyone");
   }
 }
+
+/** The wind in a word, from how hard it blows (0 to 1 either way). */
+const windWord = (w: Weather): string => {
+  const f = Math.abs(w.wind);
+  return w.id === "windy" ? (f > 0.85 ? "Strong wind" : "Gusty") : f < 0.3 ? "Calm" : f < 0.7 ? "Light breeze" : "Breezy";
+};
+
+/** One line of shorthand for the match centre, e.g. "☀️ Sunny · 31°C · Light breeze". */
+export const weatherReport = (w: Weather): string => [`${ICON[w.id]} ${WEATHERS[w.id].label}`, w.temp !== undefined ? `${w.temp}°C` : "", windWord(w)].filter(Boolean).join(" · ");

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generateTeams } from "../src/league/teams";
 import { simulateMatch } from "../src/engine/match";
-import { WEATHERS, weatherFor, type WeatherId } from "../src/engine/weather";
+import { WEATHERS, weatherFor, weatherReport, type WeatherId } from "../src/engine/weather";
 
 const [home, away] = generateTeams(7, "men");
 const play = (id: string, seed = 11) => simulateMatch({ id, seed, season: 1, matchday: 1, home, away, homeTactic: "balanced", awayTactic: "balanced" });
@@ -45,5 +45,13 @@ describe("weather", () => {
     const extra = wet.events.filter((e, i) => e.text !== dry.events[i].text);
     expect(extra.length).toBeGreaterThan(1);
     for (const e of extra) expect(e.text.startsWith(dry.events[wet.events.indexOf(e)].text)).toBe(true);
+  });
+
+  it("writes a one-line report with the sky, temperature and wind", () => {
+    const w = weatherFor(idFor("hot"));
+    expect(w.temp).toBeGreaterThanOrEqual(35);
+    expect(weatherReport(w)).toContain(`${w.temp}°C`);
+    expect(weatherReport(w)).toContain("Hot");
+    expect(weatherReport({ id: "clear", wind: 0 })).toBe("⛅ Clear · Calm");
   });
 });

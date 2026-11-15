@@ -8,7 +8,7 @@ import { teamColor } from "../league/teams";
 import { avatarBadge } from "./avatar";
 import { Cutaways } from "../cutaways";
 import { WeatherLayer } from "./weather";
-import { weatherLabel, type Weather } from "../engine/weather";
+import { weatherReport, type Weather } from "../engine/weather";
 import { describeLine, playerOfTheMatch, teamBest } from "../league/awards";
 
 /** Sets an element's text colour and returns it. */
@@ -104,6 +104,8 @@ export class LiveMatch {
   private stage = h("div", { class: "stage" });
   private cmTag = h("div", { class: "cm-tag" });
   private cmText = h("div", { class: "cm-text" });
+  /** Weather shorthand under the fixture before kick-off. */
+  private cmWeather = h("div", { class: "cm-weather" });
   private backBtn = h("button", {}, "← Back");
   private pauseBtn = h("button", { class: "primary" }, "Kick off");
   private skipBtn = h("button", {}, "Skip to end");
@@ -194,9 +196,11 @@ export class LiveMatch {
       h("div", { class: "sb-mid" }, this.score, this.clock, ...(this.derby ? [h("div", { class: "sb-derby", title: "A derby against your rival: form counts for less and tempers run higher, for both sides" }, "DERBY")] : []), h("div", { class: "sb-bar" }, this.progress)),
       tint(h("div", { class: "sb-team away" }, away.name), teamColor(away.id, "#f0b35a")));
 
-    this.stage.append(this.arena.canvas, this.cutaways.layer, h("div", { class: "cm" }, this.cmTag, this.cmText), this.fx.canvas);
-    this.cmTag.textContent = ["MATCH CENTRE", ...(this.derby ? ["DERBY"] : []), ...(this.weather && this.weather.id !== "clear" ? [weatherLabel(this.weather).toUpperCase()] : [])].join("  ·  ");
+    this.stage.append(this.arena.canvas, this.cutaways.layer, h("div", { class: "cm" }, this.cmTag, this.cmText, this.cmWeather), this.fx.canvas);
+    this.cmTag.textContent = ["MATCH CENTRE", ...(this.derby ? ["DERBY"] : [])].join("  ·  ");
     this.cmText.textContent = `${home.name} v ${away.name}`;
+    this.cmWeather.textContent = weatherReport(this.weather ?? { id: "clear", wind: 0 });
+    this.cmWeather.hidden = !this.weather;
 
     const ms = this.opts.managedSide;
     this.pFill.style.background = teamColor(home.id);
@@ -471,6 +475,7 @@ export class LiveMatch {
     this.lastShownAt = performance.now();
     if (ev.type === "halftime") this.clock.textContent = "HT";
     if (ev.type === "fulltime") this.clock.textContent = "FT";
+    this.cmWeather.hidden = true;
     const fresh = h("div", { class: `cm-text fresh t-${ev.type} ${ev.key ? "key" : ""}` }, ev.text);
     this.cmText.replaceWith(fresh);
     this.cmText = fresh;
