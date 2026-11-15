@@ -366,11 +366,18 @@ const slotScore = (p: Player, slot: Role) => {
   return eff * (1 - t * 0.15) - t * 8 + (p.role === slot ? 3 : 0);
 };
 
+/** Auto-select strategies offered in the squad screen's dropdown. Add a new one here, then handle it in autoSelect. */
+export const AUTO_MODES = {
+  best: { label: "Best team", description: "Best starters, bench and reserves from current ratings, tiredness and suspensions." },
+  rested: { label: "Most rested", description: "The freshest players start and sit on the bench; the most tired go to the reserves. Ratings and positions only break ties." },
+} as const;
+export type AutoMode = keyof typeof AUTO_MODES;
+
 /**
  * Picks the best squad from current form: starters by fit and freshness, then the three best of the
  * rest on the bench and the remaining players as reserves. Suspended and injured players go last, to the reserves.
  */
-export function autoSelect(team: Team, mode: "best" | "rested" = "best"): { lineup: string[]; reserves: string[] } {
+export function autoSelect(team: Team, mode: AutoMode = "best"): { lineup: string[]; reserves: string[] } {
   // "rested" puts the freshest players first (least tired), using fit and rating only to break ties.
   const rested = mode === "rested";
   const tired = (p: Player) => Math.round(p.tired ?? 0);

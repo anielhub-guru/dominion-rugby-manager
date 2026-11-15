@@ -24,6 +24,8 @@ import {
   type TrainingFocus,
   autoPlan,
   autoSelect,
+  AUTO_MODES,
+  type AutoMode,
   checkPlan,
   completeOffseason,
   acceptOffer,
@@ -869,26 +871,30 @@ function avatarSlot(s: SeasonState, team: Team): HTMLElement {
   return h("div", { class: "avatar-slot", title: p.name }, avatarCanvas(look, `${p.name} avatar`), h("div", { class: "avatar-cap" }, p.name));
 }
 
+let autoMode: AutoMode = "best";
+
 function squadView(s: SeasonState): HTMLElement {
   const team = teamById(s, s.managedId);
   const hint = selectedPlayer
     ? "Now click another player to swap places with them (or click the same player to cancel)."
     : "Click a player, then click another, to swap them. Starters fill the five slots in order; bench players can replace any starter. The reserves are outside the matchday eight: swap one in here between matches, for example when a starter is injured or banned.";
 
-  const autoBtn = h("button", { title: "Pick the best starters, bench and reserves from current ratings, tiredness and suspensions" }, "Auto select team");
-  const restedBtn = h("button", { title: "Pick the freshest players for the starting five and bench, leaving the most tired in the reserves. Ratings and positions only break ties. Banned and injured players are left out." }, "Auto select: most rested");
-  const autoPick = (mode: "best" | "rested") => () => {
+  const modeSel = h("select", { title: "How Auto select should choose the team" }, ...(Object.entries(AUTO_MODES) as [AutoMode, { label: string; description: string }][]).map(([id, m]) => h("option", { value: id, title: m.description, selected: id === autoMode }, m.label))) as HTMLSelectElement;
+  modeSel.onchange = () => {
+    autoMode = modeSel.value as AutoMode;
+    autoBtn.title = AUTO_MODES[autoMode].description;
+  };
+  const autoBtn = h("button", { title: AUTO_MODES[autoMode].description }, "Auto select");
+  autoBtn.onclick = () => {
     selectedPlayer = null;
     error = "";
     void update((x) => {
       const t = teamById(x, x.managedId);
-      const pick = autoSelect(t, mode);
+      const pick = autoSelect(t, autoMode);
       t.lineup = pick.lineup;
       t.reserves = pick.reserves;
     });
   };
-  autoBtn.onclick = autoPick("best");
-  restedBtn.onclick = autoPick("rested");
 
   const starters = team.lineup.map((id, i) => slotPlayer(team.players.find((p) => p.id === id)!, ROLES[i]));
   const fit = attackFit(starters);
@@ -968,7 +974,7 @@ function squadView(s: SeasonState): HTMLElement {
   }
   return h("div", { class: "col" },
     h("section", { class: "card squad-card" },
-      h("div", { class: "sq-head" }, h("h2", {}, `${team.name} - starting five, bench & reserves`), h("div", { class: "toolbar" }, autoBtn, restedBtn), h("div", { class: "hint" }, hint)),
+      h("div", { class: "sq-head" }, h("h2", {}, `${team.name} - starting five, bench & reserves`), h("div", { class: "toolbar" }, modeSel, autoBtn), h("div", { class: "hint" }, hint)),
       avatarSlot(s, team),
       h("div", { class: "sq-table" }, playerTable(team, { selectable: true })),
     ),

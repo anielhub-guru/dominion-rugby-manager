@@ -6,7 +6,7 @@ drift apart). It is shown in the app footer and on the new-game screen.
 
 ## Unreleased
 
-- Auto select: most rested. A second button on the squad screen picks the freshest players for the starting five and
+- Auto select modes. A dropdown beside Auto select on the squad screen lets you choose how it picks. New: Most rested, which picks the freshest players for the starting five and
   bench (ratings and positions only break ties) and sends the most tired to the reserves. Banned and injured players
   are still left out.
 - Derbies. Your matches against your rival (the club you have the most history with) are now derbies: marked RIVAL ·
