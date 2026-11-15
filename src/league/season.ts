@@ -370,17 +370,20 @@ const slotScore = (p: Player, slot: Role) => {
  * Picks the best squad from current form: starters by fit and freshness, then the three best of the
  * rest on the bench and the remaining players as reserves. Suspended and injured players go last, to the reserves.
  */
-export function autoSelect(team: Team): { lineup: string[]; reserves: string[] } {
+export function autoSelect(team: Team, mode: "best" | "rested" = "best"): { lineup: string[]; reserves: string[] } {
+  // "rested" puts the freshest players first (least tired), using fit and rating only to break ties.
+  const rested = mode === "rested";
+  const tired = (p: Player) => Math.round(p.tired ?? 0);
   const used = new Set<string>();
   const lineup = ROLES.map((slot) => {
     const pool = team.players.filter((p) => !used.has(p.id));
-    const best = pool.filter((p) => !isOut(p)).sort((a, b) => slotScore(b, slot) - slotScore(a, slot))[0] ?? pool[0];
+    const best = pool.filter((p) => !isOut(p)).sort((a, b) => (rested ? tired(a) - tired(b) : 0) || slotScore(b, slot) - slotScore(a, slot))[0] ?? pool[0];
     used.add(best.id);
     return best.id;
   });
   const rest = team.players
     .filter((p) => !used.has(p.id))
-    .sort((a, b) => Number(isOut(a)) - Number(isOut(b)) || overall(b) * (1 - (b.tired ?? 0) / 700) - overall(a) * (1 - (a.tired ?? 0) / 700));
+    .sort((a, b) => Number(isOut(a)) - Number(isOut(b)) || (rested ? tired(a) - tired(b) : 0) || overall(b) * (1 - (b.tired ?? 0) / 700) - overall(a) * (1 - (a.tired ?? 0) / 700));
   // The bench is three; everyone beyond the matchday eight is a reserve, so an extra squad place adds a reserve.
   const reserves = Math.max(RESERVE_COUNT, team.players.length - 8);
   return { lineup, reserves: rest.slice(rest.length - reserves).map((p) => p.id) };

@@ -6,6 +6,9 @@ drift apart). It is shown in the app footer and on the new-game screen.
 
 ## Unreleased
 
+- Auto select: most rested. A second button on the squad screen picks the freshest players for the starting five and
+  bench (ratings and positions only break ties) and sends the most tired to the reserves. Banned and injured players
+  are still left out.
 - Derbies. Your matches against your rival (the club you have the most history with) are now derbies: marked RIVAL ·
   DERBY on the fixture list, with a DERBY badge on the scoreboard and match centre, and now and then a line of derby
   commentary. They play differently, for both sides alike so they cannot be farmed: the gap between the two teams
