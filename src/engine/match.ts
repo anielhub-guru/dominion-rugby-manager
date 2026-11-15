@@ -910,8 +910,9 @@ export class MatchSim {
         this.give(22);
       } else {
         const touch = rng.chance(0.08);
-        const text = this.narrator.kickLive(this.facts(A, D, { k: k.name, dist: Math.round(dist), where: place(100 - landed) }));
-        this.emit("kick", touch ? `${text} It bounces into touch and the defence get the line-out.` : text, touch || landed >= 88, att, k.name, absX(att, landed), { hl: touch || landed >= 88, variant: touch ? "touch" : "live", ai: A.field.indexOf(k) });
+        const kf = this.facts(A, D, { k: k.name, dist: Math.round(dist), where: place(100 - landed) });
+        const text = touch ? this.narrator.kickTouch(kf) : this.narrator.kickLive(kf);
+        this.emit("kick", text, touch || landed >= 88, att, k.name, absX(att, landed), { hl: touch || landed >= 88, variant: touch ? "touch" : "live", ai: A.field.indexOf(k) });
         this.give(Math.round(100 - landed));
       }
       return;

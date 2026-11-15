@@ -83,6 +83,12 @@ const INTERCEPT: Bank = [
   (f) => `Loose pass, and ${f.t} is on it. ${f.opp} break away for ${f.run}m after the interception.`,
   (f) => `${f.t} jumps the passing lane, intercepts, and runs ${f.run}m the other way for ${f.opp}.`,
 ];
+const KICK_TOUCH: Bank = [
+  (f) => `${f.k} sends a big kick ${f.dist}m downfield, but it bounces into touch. Out of bounds, and ${f.opp} take the line-out ${f.where}.`,
+  (f) => `${f.k} finds the touchline with a ${f.dist}m kick. The ball is out of play and ${f.opp} will throw in.`,
+  (f) => `The kick from ${f.k} drifts off the pitch and bounces out. Line-out to ${f.opp} ${f.where}.`,
+  (f) => `${f.k} clears ${f.dist}m, but it skips over the sideline. Out of bounds: ${f.opp} have the throw-in.`,
+];
 const KICK_DEAD: Bank = [
   (f) => `${f.k} puts up a huge kick that runs dead. ${f.opp} drop out from their 22.`,
   (f) => `${f.k} hits it too far and it rolls over the dead-ball line. Drop-out for ${f.opp}.`,
@@ -259,6 +265,7 @@ export class Narrator {
   jackal = (f: Facts) => this.say("jackal", JACKAL, f);
   sixth = (f: Facts) => this.say("sixth", SIXTH, f);
   intercept = (f: Facts) => this.say("intercept", INTERCEPT, f);
+  kickTouch = (f: Facts) => this.say("kick-touch", KICK_TOUCH, f);
   kickDead = (f: Facts) => this.say("kick-dead", KICK_DEAD, f);
   kickLive = (f: Facts) => this.say("kick-live", KICK_LIVE, f);
   kickAheadLost = (kind: "grubber" | "chip", dead: boolean, f: Facts) =>
