@@ -869,7 +869,7 @@ function overviewView(s: SeasonState): HTMLElement {
     left.append(card(`Last result (matchday ${last.matchday})`, h("div", { class: "result" }, `${teamById(s, last.homeId).name}  ${r.homeScore} - ${r.awayScore}  ${teamById(s, last.awayId).name}`), ...(r.potm ? [h("div", { class: "potm-row" }, avatarBadge(teamById(s, last.homeId).players.concat(teamById(s, last.awayId).players).find((p) => p.id === r.potm!.id), s.gender, "md"), h("div", { class: "potm-line" }, `★ Player of the match: ${r.potm.name} (${r.potm.club}), rating ${r.potm.rating.toFixed(1)}`))] : []), h("div", { class: "toolbar" }, btn)));
   }
 
-  if (!isSeasonOver(s) && !s.offers?.length && !s.intake) left.append(goalCard(s, table, pos));
+  const goal = !isSeasonOver(s) && !s.offers?.length && !s.intake ? goalCard(s, table, pos) : null;
   const review = isSeasonOver(s) && !s.offers?.length && !s.intake ? reviewSeason(s) : null;
   if (review) left.append(reviewCard(s, review));
   left.append(dealsSummary(s), projectsSummary(s));
@@ -877,6 +877,7 @@ function overviewView(s: SeasonState): HTMLElement {
   const right = h("div", { class: "col" },
     card("League table", buildTable(s, { compact: true, onClub: (id) => (id === s.managedId ? undefined : scout(s, id)) })),
     card("Club news", h("ul", { class: "news" }, ...s.news.slice(0, 8).map(newsItem))),
+    ...(goal ? [goal] : []),
     ...(review ? [...(review.players.length ? [leadersCard(s, review)] : []), leagueCard(s, review)] : []));
   return h("div", { class: "grid" }, left, right);
 }
