@@ -512,6 +512,7 @@ function offseasonView(s: SeasonState): HTMLElement {
     const l = intake.market.find((x) => x.player.id === p.id);
     return l ? `Asking ${fmtMoney(l.price)}` : `Sale if unsigned ${fmtMoney(teenSalePrice(p))}`;
   };
+  const eraChip = (p: Player) => (s.eraProspects?.some((e) => e.id === p.id) ? h("span", { class: "card-chip y", title: "Dominion follows this career. Their potential is not special: they may play for years or never get a contract." }, "FOLLOWED") : null);
   const nameCell = (p: Player, ...chips: (Node | null)[]) => h("td", { class: "club" }, h("div", { class: "namecell" }, portrait(p, "sm"), h("span", { class: "link", title: "Compare this player", onclick: () => inspect(p.id) }, p.name), ...chips));
 
   // 1. Your squad: sell anyone not retiring.
@@ -523,7 +524,7 @@ function offseasonView(s: SeasonState): HTMLElement {
     const sold = plan.sell.includes(p.id);
     sb.append(
       h("tr", { class: `${gone || sold ? "bench" : ""} ${p.id === focus?.id ? "insp" : ""}` },
-        nameCell(p, gone ? h("span", { class: "card-chip r" }, "RETIRING") : null, sold ? h("span", { class: "card-chip y" }, "SELLING") : null),
+        nameCell(p, gone ? h("span", { class: "card-chip r" }, "RETIRING") : eraChip(p), sold ? h("span", { class: "card-chip y" }, "SELLING") : null),
         h("td", {}, p.role), h("td", {}, String(p.age)), h("td", { class: "stars" }, stars(p.potential ?? 0)), ...attrCells(p),
         h("td", { class: "pts" }, String(overall(p))), h("td", {}, fmtMoney(sellPrice(p))), h("td", {}, fmtMoney(wageOf(p))),
         h("td", {}, actionFor(p))),
@@ -539,7 +540,7 @@ function offseasonView(s: SeasonState): HTMLElement {
   for (const p of intake.prospects) {
     yb.append(
       h("tr", { class: `${plan.sign.includes(p.id) ? "sel" : ""} ${p.id === focus?.id ? "insp" : ""}` },
-        nameCell(p, vacated.has(p.role) ? h("span", { class: "oop", title: "Fills a retirement" }, " ●") : p.genius ? h("span", { class: "card-chip y", title: "Found by your youth academy: a once-in-a-generation talent" }, "GENIUS") : null),
+        nameCell(p, vacated.has(p.role) ? h("span", { class: "oop", title: "Fills a retirement" }, " ●") : p.genius ? h("span", { class: "card-chip y", title: "Found by your youth academy: a once-in-a-generation talent" }, "GENIUS") : eraChip(p)),
         h("td", {}, p.role), h("td", {}, String(p.age)), h("td", { class: "stars" }, stars(p.scouted ?? 0)), ...attrCells(p),
         h("td", { class: "pts" }, String(overall(p))), h("td", {}, fmtMoney(teenSalePrice(p))),
         h("td", {}, actionFor(p))),

@@ -11,6 +11,7 @@ import { BONUS_FLAVOUR, MATCH_PAY, earnsSquadSlot, MAX_BUYS, MONEY_START, fmtMon
 import { DEFAULT_START_YEAR } from "./calendar";
 import { MAX_SPONSOR_DEALS, SPONSOR_LAPSE_MATCHDAY, describeCondition, fanOffer, judgeFanDeal, judgeSeasonDeal, sponsorOffers, type Deal } from "./deals";
 import { FACILITIES, FACILITY_IDS, MAX_FACILITY_LEVEL, OFFER_FORMS, PROPOSAL_CHANCE, PROPOSAL_LAPSE_MATCHDAY, SPONSORS, academyBonus, geniusChance, levelOf, projectDuration, recoveryBonus, reducedInjury, trainingSlots, upgradeCost, type FacilityId, type FacilityLevels } from "./facilities";
+import { ERA_WINDOW, eraDue, isLive, joinedElsewhereNews, introNews, makeEraProspect, newEraProspect, noContractNews, recordEraSeason, retirementNews, returns, type EraProspect } from "./era";
 import { RESERVE_COUNT, makeGenius, evolvePlayers, playShare, generateTeams, makeReserves, initialPotential, makeProspects, objectiveTarget, overall, teamRating } from "./teams";
 
 export { describeLine, impact };
@@ -139,6 +140,10 @@ export interface SeasonState {
   declinedTop?: number;
   /** Each club's records, by club id. Start from generated founding records and are broken as you play. */
   records: LeagueRecords;
+  /** Marked prospects and the careers they have had since (see era.ts). Missing on older saves. */
+  eraProspects?: EraProspect[];
+  /** The season whose intake last marked a prospect. */
+  lastEraSeason?: number;
   /** Long-serving players who have retired, by the club they retired from. */
   legends: Record<string, Legend[]>;
   /** Extra squad places earned at the club you manage, on top of SQUAD_SIZE. Lost if you move to another club. */
@@ -785,6 +790,13 @@ export function startNextSeason(prev: SeasonState): SeasonState {
   }
   const news: string[] = [];
   const lastSeason = state.season;
+  // Marked prospects on a roster: record the season just played. One who has left the league is no longer followed.
+  for (const e of state.eraProspects ?? []) {
+    if (e.status !== "playing") continue;
+    const club = state.teams.find((t) => t.players.some((p) => p.id === e.id));
+    if (!club) e.status = "closed";
+    else news.push(...recordEraSeason(e, lastSeason, club.id, played[e.id]?.apps ?? 0, matches, club.name));
+  }
   // Season finances: prize money for the finishing position, less the wage bill.
   const prize = prizeFor(finish);
   const wages = teamById(state, state.managedId).players.reduce((t, p) => t + wageOf(p), 0);
@@ -810,12 +822,24 @@ export function startNextSeason(prev: SeasonState): SeasonState {
     news.push(`${finish === 1 ? "Champions" : "Beyond expectations"}: the board funds an extra squad place. You can now carry ${squadCapacity(state)} players, as extra depth for injuries and bans.`);
   }
   state.season++;
-  const retirees = evolvePlayers(state.teams, hashSeed(state.seed, state.season), (id) => playShare(played[id]?.apps ?? 0, matches));
+  // Marked prospects still waiting for a club keep growing, with no match time.
+  const waitingEra = (state.eraProspects ?? []).filter((e) => e.status === "unattached" && e.waiting);
+  const waitingTeams = waitingEra.map((e) => ({ id: `era-${e.id}`, players: [e.waiting!] }) as unknown as Team);
+  const retirees = evolvePlayers([...state.teams, ...waitingTeams], hashSeed(state.seed, state.season), (id) => playShare(played[id]?.apps ?? 0, matches));
   news.push(`Season ${state.season} begins. Squads have aged and ratings have shifted.`);
   let n = 0;
   const season = state.season;
+  const eraRetired = new Set<string>();
   for (const team of state.teams) {
     const out = retirees.get(team.id) ?? [];
+    for (const r of out) {
+      const era = eraOf(state, r.id);
+      if (era?.status !== "playing") continue;
+      era.status = "retired";
+      era.chronicle.push({ season: lastSeason, key: "retired", value: r.age });
+      eraRetired.add(r.id);
+      news.push(retirementNews(era, r.age, (id) => teamById(state, id).name));
+    }
     // Long careers are remembered by the club, whoever is managing it.
     for (const r of out) {
       const kept = recordRetirement(state.legends, team.id, r, overall(r), state.careerStats[r.id], lastSeason);
@@ -824,15 +848,37 @@ export function startNextSeason(prev: SeasonState): SeasonState {
     if (team.id === state.managedId) {
       for (const r of out) {
         r.retiring = true;
-        news.push(`${r.name} (${r.age}) retires.`);
+        if (!eraRetired.has(r.id)) news.push(`${r.name} (${r.age}) retires.`);
       }
       continue;
     }
     // AI clubs know their prospects' true potential and take the best one.
     for (const r of out) {
+      // A marked prospect still without a club may be the one a club takes instead.
+      const waiting = (state.eraProspects ?? []).find((e) => e.status === "unattached" && e.waiting?.role === r.role && returns(state.seed, season, e.id));
+      if (waiting) {
+        replacePlayer(team, r.id, waiting.waiting!);
+        delete waiting.waiting;
+        delete waiting.windowLeft;
+        waiting.status = "playing";
+        waiting.chronicle.push({ season, key: "joined", clubId: team.id });
+        news.push(joinedElsewhereNews(waiting.name, teamById(state, waiting.originClubId).name, waiting.introducedSeason, team.name));
+        delete state.careerStats[r.id];
+        continue;
+      }
       const best = makeProspects(team, `${season}.${n++}`, r.role, state.seed).sort((a, b) => (b.potential ?? 0) - (a.potential ?? 0))[0];
       replacePlayer(team, r.id, best);
       delete state.careerStats[r.id];
+    }
+  }
+  // Whoever is still without a club has one offseason fewer in which to find one.
+  for (const e of state.eraProspects ?? []) {
+    if (e.status !== "unattached") continue;
+    e.windowLeft = (e.windowLeft ?? 0) - 1;
+    if (e.windowLeft <= 0) {
+      e.status = "closed";
+      delete e.waiting;
+      delete e.windowLeft;
     }
   }
   state.intake = buildIntake(state, managedRetirees(state, retirees));
@@ -852,12 +898,33 @@ export function startNextSeason(prev: SeasonState): SeasonState {
   state.matchday = 1;
   news.push("The offseason is open: fill your squad, and look at the youth shortlist and the transfer list. The season starts when you confirm.");
   const extra: NewsItem[] = [];
+  const era = state.eraProspects?.find((e) => e.status === "intake" && e.introducedSeason === state.season);
+  const eraPlayer = era && state.intake.prospects.find((p) => p.id === era.id);
+  if (eraPlayer) extra.push({ season: state.season, matchday: 0, text: introNews(eraPlayer), link: "projects" });
   if (genius) extra.push({ season: state.season, matchday: 0, text: `The youth academy has found a genius: ${genius.name}, a ${genius.role} aged ${genius.age}, is on your youth shortlist.`, link: "projects" });
   if (proposed) extra.push(proposed);
   if (offered.length) extra.push({ season: state.season, matchday: 0, text: offered.length > 1 ? `${offered.length} sponsors have made offers for the coming season. Accept before matchday ${SPONSOR_LAPSE_MATCHDAY}.` : `${offered[0].from} has made an offer for the coming season. Accept before matchday ${SPONSOR_LAPSE_MATCHDAY}.`, link: "deals" });
   extra.push(...dealNews);
   state.news = [...extra, ...news.map((text) => ({ season: state.season, matchday: 0, text })), ...state.news].slice(0, 14);
   return state;
+}
+
+const eraOf = (s: SeasonState, id: string) => s.eraProspects?.find((e) => e.id === id);
+/** Marked players on a roster. Nothing that replaces or releases a player may take them. */
+const eraOnRoster = (s: SeasonState) => new Set((s.eraProspects ?? []).filter((e) => e.status === "playing").map((e) => e.id));
+
+/** A marked prospect the manager did not sign leaves the intake. An AI club may take them in a later offseason. */
+function passOnEra(e: EraProspect, p: Player | undefined, season: number): string {
+  e.chronicle.push({ season, key: "no-contract" });
+  if (!p) {
+    e.status = "closed";
+  } else {
+    e.status = "unattached";
+    e.waiting = structuredClone(p);
+    delete e.waiting.scouted;
+    e.windowLeft = ERA_WINDOW;
+  }
+  return noContractNews(e.name);
 }
 
 const managedRetirees = (state: SeasonState, retirees: Map<string, Player[]>) => (retirees.get(state.managedId) ?? []).map((p) => p.id);
@@ -874,6 +941,14 @@ function buildIntake(state: SeasonState, retiring: string[]): Intake {
     const role = gr.pick(roles);
     const at = prospects.findIndex((p) => p.role === role);
     prospects[at] = makeGenius(team, `${state.season}.${role}`, role, state.seed);
+  } else if (state.lastEraSeason !== state.season && eraDue(state.seed, state.season, state.lastEraSeason, (state.eraProspects ?? []).filter(isLive).length)) {
+    // Now and then the intake marks one prospect, and the game follows whatever career they have. No genius the same year.
+    const roles = vacated.size ? ROLES.filter((r) => vacated.has(r)) : ROLES;
+    const role = new Rng(hashSeed(state.seed, state.season, "era-role")).pick(roles);
+    const era = makeEraProspect(team, state.season, role, state.seed);
+    prospects[prospects.findIndex((p) => p.role === role)] = era;
+    (state.eraProspects ??= []).push(newEraProspect(era, team.id, state.season));
+    state.lastEraSeason = state.season;
   }
 
   // Each AI club lists one player. Veterans and bench players are far likelier than stars,
@@ -985,7 +1060,7 @@ export function completeOffseason(prev: SeasonState, plan: OffseasonPlan): Seaso
   const sell = new Set(plan.sell);
 
   // A club never drops a player it has just listed for someone else's sale.
-  const listed = new Set(intake.market.map((l) => l.player.id));
+  const listed = new Set([...intake.market.map((l) => l.player.id), ...eraOnRoster(state)]);
   // Sold players go to an AI club, replacing their weakest player in that position if they are better.
   for (const p of team.players.filter((x) => sell.has(x.id))) {
     const price = sellPrice(p);
@@ -1019,6 +1094,15 @@ export function completeOffseason(prev: SeasonState, plan: OffseasonPlan): Seaso
     replacePlayer(club, real.id, youngster);
     joiners.push(real);
     news.push(`Bought ${real.name} (${real.role}, ${real.age}) from ${club.name} for ${fmtMoney(l.price)}.`);
+  }
+  for (const e of state.eraProspects ?? []) {
+    if (e.status !== "intake") continue;
+    if (plan.sign.includes(e.id)) {
+      e.status = "playing";
+      e.chronicle.push({ season, key: "joined", clubId: team.id });
+    } else {
+      news.push(passOnEra(e, intake.prospects.find((p) => p.id === e.id), season));
+    }
   }
   const unsigned = intake.prospects.filter((p) => !plan.sign.includes(p.id));
   if (unsigned.length) news.push(`Sold ${unsigned.length} unpicked prospects for ${fmtMoney(check.teenIncome)}.`);
@@ -1134,8 +1218,9 @@ export function acceptOffer(prev: SeasonState, clubId: string): SeasonState {
     delete state.careerStats[r.id];
   }
   // AI clubs run a squad of ten: the extra places you earned go, and the weakest spare players are released.
+  const marked = eraOnRoster(state);
   while (old.players.length > SQUAD_SIZE) {
-    const spare = old.players.filter((p) => !old.lineup.includes(p.id)).sort((a, b) => overall(a) - overall(b))[0];
+    const spare = old.players.filter((p) => !old.lineup.includes(p.id) && !marked.has(p.id)).sort((a, b) => overall(a) - overall(b))[0];
     old.players = old.players.filter((p) => p.id !== spare.id);
     old.reserves = (old.reserves ?? []).filter((id) => id !== spare.id);
     delete state.careerStats[spare.id];
@@ -1155,7 +1240,11 @@ export function acceptOffer(prev: SeasonState, clubId: string): SeasonState {
   delete state.offers;
   state.deals = sponsorOffers(state);
   delete state.fanPassed;
+  // A marked prospect on the shortlist you walk away from was not signed.
+  const leftBehind: string[] = [];
+  for (const e of state.eraProspects ?? []) if (e.status === "intake") leftBehind.push(passOnEra(e, state.intake?.prospects.find((p) => p.id === e.id), state.season));
   state.intake = buildIntake(state, []);
+  state.news = [...leftBehind.map((text) => ({ season: state.season, matchday: 0, text })), ...state.news];
   const text = `You leave ${old.name} and take over ${club.name}. Board mandate: ${offer.mandate.toLowerCase()}. Starting balance ${fmtMoney(offer.budget)}.`;
   state.news = [{ season: state.season, matchday: 0, text }, ...state.news].slice(0, 14);
   return state;
