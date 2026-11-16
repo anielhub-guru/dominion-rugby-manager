@@ -107,7 +107,18 @@ export function dealProgress(d: Deal, s: SeasonState): { have: number; need: num
 /** The target in words. */
 export function describeCondition(c: DealCondition, s: SeasonState): string {
   switch (c.type) {
-    case "plays": return `Play ${playerName(s, c.playerId)} in ${c.games} matches this season`;
+    case "plays": {
+      const who = playerName(s, c.playerId);
+      // Same deal, different phrasing; picked from the deal itself so it never changes between renders.
+      const variants = [
+        `Play ${who} in ${c.games} matches this season`,
+        `Give ${who} ${c.games} appearances this season`,
+        `Get ${who} onto the pitch in ${c.games} matches`,
+        `Field ${who} at least ${c.games} times this season`,
+        `Make sure ${who} features in ${c.games} of your matches`,
+      ];
+      return variants[hashSeed(s.seed, s.season, c.playerId, c.games) % variants.length];
+    }
     case "finish": return c.maxPos === 1 ? "Win the league" : `Finish in the top ${c.maxPos}`;
     case "wins": return `Win ${c.count} matches this season`;
     case "shutouts": return `Keep the opposition scoreless in ${c.count} matches`;
@@ -158,8 +169,9 @@ export function sponsorOffers(s: SeasonState): Deal[] {
       // A player on the fringe, so the deal is a real choice: they might not be who you would pick.
       const spare = team.players.filter((p) => !team.lineup.includes(p.id) && !p.retiring);
       if (!spare.length) continue;
-      cond = { type: "plays", playerId: rng.pick(spare).id, games: 7 };
-      reward = 900;
+      const games = rng.int(5, 9);
+      cond = { type: "plays", playerId: rng.pick(spare).id, games };
+      reward = 900 + 100 * (games - 7);
     } else if (kind === "finish") {
       const maxPos = Math.max(1, rank - 2);
       cond = { type: "finish", maxPos };
