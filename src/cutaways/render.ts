@@ -156,8 +156,8 @@ function drawStoryHair(g: CanvasRenderingContext2D, width: number, height: numbe
     g.lineCap = "round";
     const openDive = artwork === "grounding0";
     const jackal = artwork === "jackal";
-    if (choice === 5 && !jackal) g.translate(9, -2);
-    const silhouetteScale = choice === 5 ? (openDive ? 1 : jackal ? 0.55 : 0.95) : choice === 7 || choice === 8 ? 1.1 : choice === 9 ? (jackal ? 0.52 : 0.95) : 1;
+    if (choice === 5 && !jackal) g.translate(openDive ? -4 : 9, openDive ? -8 : -2);
+    const silhouetteScale = choice === 5 ? (openDive ? 0.9 : jackal ? 0.55 : 0.95) : choice === 7 || choice === 8 ? 1.1 : choice === 9 ? (jackal ? 0.52 : 0.95) : 1;
     g.scale(silhouetteScale, silhouetteScale);
     const [outer, detail] = HEAD_STYLES[choice];
     const newHair = new Path2D(outer);
