@@ -32,8 +32,10 @@ export interface Deal {
   /** The sponsor's name, or "The supporters". */
   from: string;
   cond: DealCondition;
-  /** Thousands of naira paid when the target is met. */
+  /** Thousands of naira paid when the target is met. Zero for a challenge with no cash on offer. */
   reward: number;
+  /** For fan challenges: extra match winnings (thousands) on the match after, a bigger crowd, when the target is met. */
+  gate?: number;
   /** Thousands of naira you pay if a sponsor deal is missed (0 for fans). */
   penalty: number;
   season: number;
@@ -49,7 +51,7 @@ export const MAX_SPONSOR_DEALS = 2;
 /** A missed sponsor deal costs this share of its reward. */
 export const PENALTY_SHARE = 0.3;
 /** Chance the supporters set a challenge before a match. */
-export const FAN_CHANCE = 0.35;
+export const FAN_CHANCE = 0.15;
 
 const round10 = (v: number) => Math.round(v / 10) * 10;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -182,6 +184,14 @@ export function sponsorOffers(s: SeasonState): Deal[] {
   return deals;
 }
 
+/** Most fan challenges are not for cash: some are just pride, some bring a bigger crowd to the next match, and a few pay. */
+function withPerk(d: Deal, rng: Rng): Deal {
+  const roll = rng.next();
+  if (roll < 0.25) return d;
+  if (roll < 0.6) return { ...d, reward: 0, gate: d.reward >= 400 ? 150 : 100 };
+  return { ...d, reward: 0 };
+}
+
 /** The supporters' challenge for the match about to be played, if they have set one. It is worked out from the save, so it cannot be rerolled. */
 export function fanOffer(s: SeasonState): Deal | null {
   if (s.intake || s.offers?.length || s.matchday > s.totalMatchdays) return null;
@@ -198,8 +208,8 @@ export function fanOffer(s: SeasonState): Deal | null {
   const isRival = rivalOf(s.rivalry, s.managedId) === oppId;
   const base = { source: "fans" as const, from: "The supporters", penalty: 0, season: s.season, matchday: s.matchday, status: "offered" as const, id: `f${s.season}.${s.matchday}` };
   if (isRival) {
-    if (!rng.chance(0.9)) return null;
-    return { ...base, cond: { type: "beat", clubId: oppId, rival: true }, reward: 500 };
+    if (!rng.chance(0.5)) return null;
+    return withPerk({ ...base, cond: { type: "beat", clubId: oppId, rival: true }, reward: 500 }, rng);
   }
   if (!rng.chance(FAN_CHANCE)) return null;
   const spare = team.players.filter((p) => !team.lineup.includes(p.id) && !p.ban && !(p.injury?.games ?? 0));
@@ -209,6 +219,6 @@ export function fanOffer(s: SeasonState): Deal | null {
   ];
   if (gap >= 0) options.push([2, () => ({ ...base, cond: { type: "noLose" }, reward: gap >= 4 ? 250 : 150 })]);
   if (spare.length) options.push([2, () => ({ ...base, cond: { type: "playNext", playerId: rng.pick(spare).id }, reward: 250 })]);
-  return rng.weighted(options, (o) => o[0])[1]();
+  return withPerk(rng.weighted(options, (o) => o[0])[1](), rng);
 }
 

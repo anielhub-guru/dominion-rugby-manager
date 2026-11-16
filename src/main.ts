@@ -751,7 +751,7 @@ function fanCard(s: SeasonState): HTMLElement | null {
   yes.onclick = () => void guarded(async () => void (await persist(acceptFanChallenge(s))));
   const no = h("button", { disabled: busy }, "Pass");
   no.onclick = () => void guarded(async () => void (await persist(passFanChallenge(s))));
-  return card("The supporters' challenge", h("p", {}, `${describeCondition(o.cond, s)}. If you do, the fans raise ${fmtMoney(o.reward)} straight after the match.`), h("div", { class: "toolbar" }, yes, no));
+  return card("The supporters' challenge", h("p", {}, `${describeCondition(o.cond, s)}. ${o.reward ? `If you do, the fans raise ${fmtMoney(o.reward)} straight after the match.` : o.gate ? `If you do, expect a bigger crowd at the match after: ${fmtMoney(o.gate)} extra gate.` : "The fans just want to see it. No reward."}`), h("div", { class: "toolbar" }, yes, no));
 }
 
 /** A short card for other screens: the supporters' challenge, how many deals are running, and a link to the Deals tab. */
@@ -777,7 +777,7 @@ function dealsView(s: SeasonState): HTMLElement {
   });
   const running = deals.filter((d) => d.status === "active").map((d) => {
     const prog = d.source === "sponsor" ? dealProgress(d, s).text : `Judged after matchday ${d.matchday}`;
-    return h("div", { class: "project" }, h("div", {}, h("b", {}, d.from), h("div", {}, describeCondition(d.cond, s)), h("div", { class: "dim" }, prog)), h("span", { class: "dim" }, d.source === "sponsor" ? `+${fmtMoney(d.reward)} / -${fmtMoney(d.penalty)}` : `+${fmtMoney(d.reward)}`));
+    return h("div", { class: "project" }, h("div", {}, h("b", {}, d.from), h("div", {}, describeCondition(d.cond, s)), h("div", { class: "dim" }, prog)), h("span", { class: "dim" }, d.source === "sponsor" ? `+${fmtMoney(d.reward)} / -${fmtMoney(d.penalty)}` : d.reward ? `+${fmtMoney(d.reward)}` : d.gate ? `+${fmtMoney(d.gate)} gate` : "for pride"));
   });
   return h("div", { class: "col" },
     ...(fan ? [fan] : []),

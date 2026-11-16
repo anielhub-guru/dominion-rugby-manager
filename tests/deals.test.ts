@@ -103,12 +103,24 @@ describe("fan challenges", () => {
     const o = fanOffer(s)!;
     expect(fanOffer(s)).toEqual(o);
     expect(o.source).toBe("fans");
-    expect(o.reward).toBeGreaterThan(0);
+    expect(o.reward).toBeGreaterThanOrEqual(0);
     expect(o.penalty).toBe(0);
     expect(fanOffer(passFanChallenge(s))).toBeNull();
     const taken = acceptFanChallenge(s);
     expect(taken.deals!.some((d) => d.source === "fans" && d.status === "active")).toBe(true);
     expect(fanOffer(taken)).toBeNull();
+  });
+
+  it("a met challenge with a gate perk boosts the next match's winnings", () => {
+    let s = { ...newGame(4, "ash"), deals: [] } as SeasonState;
+    const deal: Deal = { id: "f", source: "fans", from: "The supporters", cond: { type: "noLose" }, reward: 0, gate: 100, penalty: 0, season: 1, matchday: 1, status: "active" };
+    s = { ...s, deals: [deal] };
+    const next = playMatchday(s).state;
+    const m = next.fixtures.find((x) => x.matchday === 1 && (x.homeId === "ash" || x.awayId === "ash"))!;
+    const r = m.result!;
+    const [pf, pa] = m.homeId === "ash" ? [r.homeScore, r.awayScore] : [r.awayScore, r.homeScore];
+    if (pf >= pa) expect(next.gateBoost).toEqual({ season: 1, matchday: 2, extra: 100 });
+    else expect(next.gateBoost).toBeUndefined();
   });
 
   it("pay right after the match when met, and cost nothing when missed", () => {

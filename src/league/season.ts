@@ -157,6 +157,8 @@ export interface SeasonState {
   deals?: Deal[];
   /** The fan challenge you passed on, as "season:matchday", so it is not shown again. */
   fanPassed?: string;
+  /** Extra match winnings from a fan challenge met, paid after the match on this matchday. */
+  gateBoost?: { season: number; matchday: number; extra: number };
 }
 
 /** An offer to build a facility. A board offer comes out of your budget; a sponsor pays part or all of it for a promise to stay. */
@@ -266,7 +268,7 @@ export function acceptFanChallenge(prev: SeasonState): SeasonState {
   if (!offer) throw new Error("The supporters have no challenge for this match.");
   const state = structuredClone(prev);
   state.deals = [...(state.deals ?? []), { ...offer, status: "active" }];
-  state.news = [{ season: state.season, matchday: state.matchday, text: `The supporters have a challenge for matchday ${state.matchday}: ${describeCondition(offer.cond, state).toLowerCase()}. ${fmtMoney(offer.reward)} if you do.`, link: "deals" as const }, ...state.news].slice(0, 14);
+  state.news = [{ season: state.season, matchday: state.matchday, text: `The supporters have a challenge for matchday ${state.matchday}: ${describeCondition(offer.cond, state).toLowerCase()}.${offer.reward ? ` ${fmtMoney(offer.reward)} if you do.` : offer.gate ? " A bigger crowd next match if you do." : ""}`, link: "deals" as const }, ...state.news].slice(0, 14);
   return state;
 }
 
@@ -457,13 +459,16 @@ export function playMatchday(prev: SeasonState, managedLog?: MatchLog): { state:
     const [pf, pa] = home ? [mine.homeScore, mine.awayScore] : [mine.awayScore, mine.homeScore];
     const opp = home ? mine.awayName : mine.homeName;
     const verb = pf > pa ? "Won" : pf === pa ? "Drew" : "Lost";
-    const pay = pf > pa ? MATCH_PAY.win : pf === pa ? MATCH_PAY.draw : MATCH_PAY.loss;
+    let pay = pf > pa ? MATCH_PAY.win : pf === pa ? MATCH_PAY.draw : MATCH_PAY.loss;
+    const boost = state.gateBoost?.season === state.season && state.gateBoost.matchday === md ? state.gateBoost.extra : 0;
+    pay += boost;
+    delete state.gateBoost;
     state.money += pay;
     const after = computeStandings(ids, state.fixtures);
     const was = before.findIndex((r) => r.teamId === state.managedId) + 1;
     const now = after.findIndex((r) => r.teamId === state.managedId) + 1;
     const move = md === 1 ? `Now ${ord(now)}.` : now < was ? `Up to ${ord(now)}.` : now > was ? `Down to ${ord(now)}.` : `Holding ${ord(now)}.`;
-    news.push(`${verb} ${pf}-${pa} ${home ? "vs" : "at"} ${opp}. ${move} Match winnings ${fmtMoney(pay)}.`);
+    news.push(`${verb} ${pf}-${pa} ${home ? "vs" : "at"} ${opp}. ${move} Match winnings ${fmtMoney(pay)}${boost ? ", including a bigger gate" : ""}.`);
     if (now === 1 && was !== 1) news.push("You have gone top of the table.");
     const oppId = home ? mine.awayId : mine.homeId;
     if (rivalBefore === oppId) news.push(pf > pa ? `Bragging rights: you beat your rivals ${opp}.` : pf < pa ? `Your rivals ${opp} get the better of you.` : `Honours even with your rivals ${opp}.`);
@@ -504,7 +509,9 @@ function settleDeals(state: SeasonState, md: number, mine?: MatchLog): NewsItem[
     const met = mine ? judgeFanDeal(d, state, mine) : false;
     const what = describeCondition(d.cond, state).toLowerCase();
     if (met) state.money += d.reward;
-    out.push({ season: state.season, matchday: md, text: met ? `The supporters are delighted: you met their challenge (${what}). They raise ${fmtMoney(d.reward)} for the club.` : `The supporters wanted you to ${what}, and are disappointed.`, link: "deals" });
+    if (met && d.gate) state.gateBoost = { season: state.season, matchday: md + 1, extra: d.gate };
+    const thanks = d.reward ? `They raise ${fmtMoney(d.reward)} for the club.` : d.gate ? "Expect a bigger crowd at the next match." : "They are right behind you.";
+    out.push({ season: state.season, matchday: md, text: met ? `The supporters are delighted: you met their challenge (${what}). ${thanks}` : `The supporters wanted you to ${what}, and are disappointed.`, link: "deals" });
   }
   state.deals = state.deals.filter((x) => !(x.source === "fans" && x.matchday === md));
   if (md >= SPONSOR_LAPSE_MATCHDAY && state.deals.some((x) => x.source === "sponsor" && x.status === "offered")) {
