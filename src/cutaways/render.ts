@@ -131,7 +131,7 @@ function drawStoryHair(g: CanvasRenderingContext2D, width: number, height: numbe
       g.translate(pad, pad);
       g.scale(width / 286, height / 109);
       g.globalCompositeOperation = "destination-out";
-      g.fill(new Path2D("M105 0 H195 V55 H105 Z"));
+      g.fill(new Path2D("M130 0 H178 V31 H130 Z"));
       g.restore();
     }
     g.save();
