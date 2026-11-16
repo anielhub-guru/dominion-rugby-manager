@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "tauri": "tauri",
+    "avatars:sync-lab": "node scripts/sync-avatar-lab.mjs",
     "cutaways:extract": "node scripts/extract-cutaway-art.mjs"
   },
   "devDependencies": {

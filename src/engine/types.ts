@@ -12,6 +12,8 @@ export interface Look {
   build: number;
   /** Which of the two base faces. */
   face: number;
+  /** Optional World Rugby-style goggles. Missing on older saves means off. */
+  goggles?: boolean;
   eyes: number;
   nose: number;
   lips: number;

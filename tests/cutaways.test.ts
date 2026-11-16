@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { generateTeams } from "../src/league/teams";
 import { simulateMatch } from "../src/engine/match";
 import { HAIR } from "../src/league/look";
-import { BEFORE, CHANCE, LAB_HAIR, STORY } from "../src/cutaways/data";
+import { ART_HAIR, BEFORE, CHANCE, HEAD_STYLES, LAB_HAIR, STORY, STORY_HEADS } from "../src/cutaways/data";
 import { kindsFor } from "../src/cutaways";
 
 const art = (name: string) => existsSync(new URL(`../src/cutaways/art/${name}.webp`, import.meta.url));
@@ -20,7 +20,11 @@ describe("illustrated cutaways", () => {
 
   it("maps every game hairstyle to a lab hairstyle", () => {
     expect(LAB_HAIR).toHaveLength(HAIR.length);
-    for (const h of LAB_HAIR) expect(h >= 0 && h <= 4).toBe(true);
+    for (const h of LAB_HAIR) expect(h >= 0 && h <= 9).toBe(true);
+    expect(ART_HAIR).toHaveLength(10);
+    for (const h of ART_HAIR) expect(h >= 0 && h <= 4).toBe(true);
+    expect(HEAD_STYLES).toHaveLength(10);
+    for (const kind of Object.keys(STORY)) expect(STORY_HEADS).toHaveProperty(kind);
   });
 
   it("every kind has odds between 0 and 1, and every event kind it picks exists", () => {

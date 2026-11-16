@@ -76,9 +76,51 @@ export const FREQUENCIES: readonly { id: Frequency; label: string; chance: numbe
 
 /**
  * Game hairstyle (Look.portrait, see league/look.ts HAIR) to the lab's hairstyle number:
- * 0 original braided ponytail, 1 braided bun, 2 natural puff, 3 sports hijab, 4 bob cut.
+ * 0 original braided ponytail, 1 braided bun, 2 natural puff, 3 sports hijab, 4 bob cut,
+ * 5 curly afro, 6 tapered natural crop, 7 twin Dutch braids, 8 tied-back locs,
+ * 9 curly high ponytail.
  */
-export const LAB_HAIR = [0, 2, 3, 4, 0, 1] as const;
+export const LAB_HAIR = [0, 2, 3, 4, 0, 1, 5, 6, 7, 8, 9] as const;
+
+/** Existing full-pose raster used beneath each hairstyle-specific vector silhouette. */
+export const ART_HAIR = [0, 1, 2, 3, 4, 1, 0, 0, 1, 1] as const;
+
+/** Crown registration: x, y, scale, facing and athlete slot, all relative to the uncropped pose. */
+export type HeadMark = readonly [number, number, number, 1 | -1, number];
+export const STORY_HEADS: Record<StoryKind, readonly (readonly HeadMark[])[]> = {
+  grounding: [
+    [[.750, .018, .090, 1, 0]],
+    [[.834, .018, .053, 1, 0], [.353, .208, .055, 1, 1]],
+    [[.771, .012, .058, 1, 0], [.323, .258, .058, 1, 1]],
+  ],
+  celebration: [[[.192, .110, .151, 1, 0], [.815, .127, .151, -1, 1]]],
+  lastditch: [[[.836, .007, .108, 1, 0], [.543, .358, .104, 1, 1]]],
+  jackal: [[[.142, .525, .114, -1, 0], [.622, .020, .115, -1, 1]]],
+  intercept: [[[.475, .015, .140, 1, 0]]],
+  goalmiss: [[[.714, .018, .315, 1, 0]]],
+  card: [[[.156, .170, .165, 1, -1], [.808, .162, .170, -1, 0]]],
+  pass: [[[.382, .014, .130, 1, 0]]],
+  kickchase: [[[.344, .014, .140, 1, 0]]],
+  goal: [[[.350, .060, .220, 1, 0]]],
+  waist: [[[.655, .012, .125, 1, 0], [.501, .238, .125, 1, 1]]],
+  double: [[[.520, .015, .115, 1, 0], [.310, .395, .115, 1, 1], [.735, .086, .120, -1, 1]]],
+  ankle: [[[.823, .010, .109, 1, 0], [.278, .505, .105, 1, 1]]],
+  huddle: [[[.565, .010, .230, 1, 0]]],
+};
+
+/** Side-profile hair overlays used by every full-pose cutaway. */
+export const HEAD_STYLES: readonly (readonly [outer: string, detail: string])[] = [
+  ["M-11 9 Q-23 8 -29 17 Q-38 24 -49 24 Q-44 29 -36 28 Q-24 27 -16 20 L-10 15Z", "M-15 12 Q-25 13 -31 20 Q-40 25 -45 25 M-15 15 Q-23 17 -27 22 Q-35 26 -40 27"],
+  ["M-8 10 Q-15 7 -18 12 C-29 9 -36 13 -36 20 C-37 28 -28 31 -22 28 Q-15 25 -14 19 L-8 16Z", "M-13 12 Q-21 16 -19 22 M-23 13 C-36 13 -37 25 -27 27 M-26 16 C-33 16 -34 22 -28 24 Q-22 25 -22 20 Q-22 17 -26 18"],
+  ["M-8 9 Q-11 5 -16 5 Q-17 0 -22 1 Q-26 -4 -30 -1 Q-36 -4 -39 1 Q-44 1 -45 6 Q-49 9 -47 14 Q-49 19 -43 22 Q-42 27 -37 26 Q-34 30 -29 26 Q-24 29 -20 24 Q-16 24 -14 18 L-9 15Z", "M-40 8 q3 -4 7 -2 m-7 11 q3 4 8 2 m-2 -10 q3 -4 7 -1 m0 11 q4 3 7 -1 m-6 -7 q4 -2 6 2 M-17 8 L-15 17"],
+  ["M10 4 Q2 -3 -8 1 Q-17 3 -18 15 L-20 25 L-25 37 Q-14 42 0 37 L8 29 Q2 26 0 20 Q-5 15 0 9Z", "M-15 19 Q-12 29 -3 32 M-18 29 Q-10 34 -3 34"],
+  ["M11 4 C5 -3 -7 -4 -15 2 C-21 7 -22 14 -22 22 L-23 30 Q-17 35 -9 35 L0 34 Q-4 29 -5 22 Q-7 15 -2 10 Q5 10 11 4Z", "M-4 1 C-15 7 -17 16 -16 30 M-9 2 Q-20 12 -20 28 M-6 13 Q-11 22 -9 31"],
+  ["M4 12 Q1 3 -7 -2 Q-13 -10 -24 -8 Q-34 -15 -44 -8 Q-56 -9 -61 2 Q-70 7 -67 19 Q-73 29 -66 39 Q-65 50 -54 54 Q-47 63 -36 59 Q-26 65 -18 57 Q-9 54 -10 43 Q-4 36 -6 28 Q1 22 4 12Z", "M-52 2 q5 -6 10 -1 m-17 13 q5 -6 10 -1 m-12 17 q6 5 11 0 m3 -20 q5 -6 10 -1 m-3 18 q6 5 11 0 m-18 15 q6 5 11 0"],
+  ["M3 8 Q-3 -2 -13 -2 Q-24 -1 -28 8 Q-29 14 -23 18 Q-14 21 -7 17 Q-3 13 3 8Z", "M-23 7 Q-15 1 -6 6 M-24 12 Q-15 7 -7 11 M-18 16 Q-12 11 -6 14"],
+  ["M2 8 Q-4 -2 -14 -1 Q-25 1 -28 10 Q-28 17 -21 19 L-10 17 Q-6 13 2 8Z M-20 15 Q-34 20 -40 34 Q-45 45 -37 53 Q-30 50 -31 40 Q-25 53 -17 47 Q-12 40 -21 29 Q-15 39 -8 35 Q-5 27 -17 20Z", "M-22 5 Q-15 10 -12 17 M-27 9 Q-19 14 -17 20 M-34 31 Q-28 39 -36 48 M-25 27 Q-18 37 -24 45 M-17 24 Q-9 31 -14 37"],
+  ["M2 8 Q-4 -2 -14 -1 Q-25 1 -28 10 Q-28 17 -20 20 L-10 17 Q-6 13 2 8Z M-21 14 Q-36 10 -48 18 Q-60 23 -66 34 Q-61 42 -52 36 Q-46 47 -37 39 Q-30 50 -22 41 Q-16 33 -24 24 Q-14 22 -21 14Z", "M-23 5 Q-17 10 -13 17 M-28 10 Q-21 15 -19 20 M-53 24 Q-46 30 -57 36 M-43 20 Q-35 29 -45 37 M-32 18 Q-24 27 -34 39"],
+  ["M2 8 Q-4 -2 -14 -1 Q-18 -5 -24 -4 Q-30 -13 -38 -10 Q-47 -11 -51 -2 Q-57 5 -51 13 Q-52 21 -43 24 Q-35 29 -28 22 Q-20 24 -17 17 L-10 17 Q-6 13 2 8Z", "M-20 1 Q-25 6 -19 11 M-43 -6 q5 -5 10 -1 m-14 11 q5 -5 10 -1 m-2 12 q5 4 10 0"],
+];
 
 export interface Frame {
   width: number;
@@ -164,6 +206,26 @@ export const HAIR_PARTS: readonly ({ outer: string; detail: string; hijab?: bool
     outer: "M110 8 Q95 -4 81 4 Q69 11 70 29 L72 49 Q83 55 98 47 L97 36 Q91 30 98 23 L106 24 Q101 17 110 8 Z",
     detail: "M78 15 Q73 29 79 44 M84 10 Q78 22 84 45",
     hijab: true,
+  },
+  {
+    outer: "M111 9 Q105 -2 95 1 Q89 -7 80 -1 Q72 -6 66 2 Q56 0 54 10 Q45 14 49 24 Q44 33 54 38 Q59 47 69 42 Q77 49 84 41 Q94 44 98 34 Q106 30 103 22 L107 20 Z",
+    detail: "M61 10 q5 -5 10 0 m-15 11 q5 -5 10 0 m2 13 q5 -5 10 0 m7 -22 q5 -5 10 0 m-8 14 q5 -5 10 0",
+  },
+  {
+    outer: "M110 9 Q99 0 85 2 Q72 3 67 14 Q64 23 72 31 L82 34 Q88 28 98 23 L106 24 Q102 16 110 9 Z",
+    detail: "M72 12 q4 -5 8 0 m-10 7 q4 -5 8 0 m2 -12 q4 -4 8 0 m0 8 q4 -4 8 0",
+  },
+  {
+    outer: "M110 8 Q96 -3 82 2 Q70 7 70 23 L76 34 L83 36 Q88 28 98 23 L106 24 Q101 16 110 8 Z M75 28 Q66 39 67 53 Q72 64 78 52 Q82 42 82 33 Z",
+    detail: "M76 9 Q72 18 75 28 M82 5 Q78 16 80 29 M89 4 Q84 15 86 27 M72 42 Q76 47 70 55 M76 37 Q81 44 75 52",
+  },
+  {
+    outer: "M110 8 Q96 -3 82 2 Q70 8 70 24 L77 34 L84 35 Q89 28 98 23 L106 24 Q101 16 110 8 Z M76 31 Q63 36 61 49 Q63 63 72 56 Q77 66 83 55 Q88 63 93 52 Q99 55 99 45 Q96 36 84 32 Z",
+    detail: "M75 8 Q72 18 76 29 M82 5 Q79 17 82 29 M89 4 Q85 16 87 27 M67 45 q4 -5 8 0 m-7 10 q4 -5 8 0 m5 -15 q4 -5 8 0 m-7 11 q4 -5 8 0",
+  },
+  {
+    outer: "M110 8 Q97 -3 82 2 Q70 8 70 23 L77 34 L84 35 Q89 27 98 23 L106 24 Q101 16 110 8 Z M78 5 Q66 -4 59 5 Q50 8 53 18 Q47 26 55 32 Q56 41 66 39 Q73 45 80 37 Q88 36 88 27 Q94 20 87 14 Q87 7 78 5 Z",
+    detail: "M75 8 Q72 17 76 29 M82 5 Q79 16 82 28 M58 12 q4 -5 8 0 m-10 10 q4 -5 8 0 m3 11 q4 -5 8 0 m1 -17 q4 -5 8 0",
   },
 ];
 /** The area of the sprite (152 x 260 space) cleared before a new hairstyle is drawn. */

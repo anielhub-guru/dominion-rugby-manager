@@ -1,5 +1,7 @@
 # Illustrated cutaways
 
+For hairstyle, headgear, avatar or cross-project artwork changes, follow the canonical [avatar and silhouette artwork pipeline](../../docs/avatar-silhouette-pipeline.md) before editing.
+
 Now and then a match moment (a card, a try, a big tackle, a jackal turnover, an interception, a kick, the kick-off huddle) is shown as a detailed
 drawing over the arena, instead of only the arena animation. The arena plays first and the cutaway is a
 bonus on top, except for kinds in `BEFORE` (data.ts), which show the action itself and play ahead of it:

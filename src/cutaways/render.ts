@@ -1,13 +1,14 @@
-import { BRAID_LINES, HAIR_PARTS, HEAD_CLEAR, SCALP, STORY, TIMING, type Kind, type StoryKind, type Transition } from "./data";
+import { ART_HAIR, BRAID_LINES, HAIR_PARTS, HEAD_CLEAR, HEAD_STYLES, SCALP, STORY, STORY_HEADS, TIMING, type HeadMark, type Kind, type StoryKind, type Transition } from "./data";
 
 /** Artwork files (URLs only: an image is not fetched until a cutaway needs it). */
 const URLS = import.meta.glob("./art/*.webp", { query: "?url", import: "default", eager: true }) as Record<string, string>;
 const urlOf = (name: string) => URLS[`./art/${name}.webp`];
 
-/** One athlete: lab hairstyle 0-4 and the width scale for her build. */
+/** One athlete: Lab hairstyle, width scale and optional rugby goggles. */
 export interface Athlete {
   hair: number;
   build: number;
+  goggles?: boolean;
 }
 export interface CutawayRequest {
   kind: Kind;
@@ -96,21 +97,79 @@ function oval(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, r
 /** A pose with the second player's head and shoulders swapped in when her hairstyle differs. */
 async function composite(spec: (typeof STORY)[StoryKind], pose: number, a: Athlete, b?: Athlete): Promise<{ canvas: HTMLCanvasElement; bounds: Bounds } | null> {
   const name = spec.art(pose);
-  const base = await load(`${name}-${a.hair}`);
-  const regions = b && b.hair !== a.hair ? spec.regions(pose) : [];
-  const other = regions.length ? await load(`${name}-${b!.hair}`) : null;
-  const [canvas, g] = newCanvas(base.naturalWidth, base.naturalHeight);
-  g.drawImage(base, 0, 0);
+  const baseHair = ART_HAIR[a.hair] ?? 0;
+  const otherHair = b ? ART_HAIR[b.hair] ?? 0 : baseHair;
+  const base = await load(`${name}-${baseHair}`);
+  const regions = b && otherHair !== baseHair ? spec.regions(pose) : [];
+  const other = regions.length ? await load(`${name}-${otherHair}`) : null;
+  const heads = STORY_HEADS[name.startsWith("grounding") ? "grounding" : name as StoryKind]?.[pose] ?? STORY_HEADS[name as StoryKind]?.[0] ?? [];
+  const decorated = a.hair >= 5 || !!b && b.hair >= 5;
+  const pad = decorated ? Math.ceil(Math.max(8, ...heads.map(([, , size]) => size * base.naturalWidth * 2.5))) : 0;
+  const [canvas, g] = newCanvas(base.naturalWidth + 2 * pad, base.naturalHeight + 2 * pad);
+  g.drawImage(base, pad, pad);
   if (other) {
     for (const [x, y, w, h] of regions) {
-      const left = Math.round(x * canvas.width), top = Math.round(y * canvas.height);
-      const width = Math.round(w * canvas.width), height = Math.round(h * canvas.height);
+      const left = pad + Math.round(x * base.naturalWidth), top = pad + Math.round(y * base.naturalHeight);
+      const width = Math.round(w * base.naturalWidth), height = Math.round(h * base.naturalHeight);
       g.clearRect(left, top, width, height);
       g.drawImage(other, x * other.naturalWidth, y * other.naturalHeight, w * other.naturalWidth, h * other.naturalHeight, left, top, width, height);
     }
   }
+  if (decorated) drawStoryHair(g, base.naturalWidth, base.naturalHeight, pad, heads, [a.hair, b?.hair ?? a.hair], name);
   const bounds = opaqueBounds(g, canvas.width, canvas.height);
   return bounds ? { canvas, bounds } : null;
+}
+
+function drawStoryHair(g: CanvasRenderingContext2D, width: number, height: number, pad: number, heads: readonly HeadMark[], hair: readonly number[], artwork: string): void {
+  for (const [cx, cy, size, facing, slot] of heads) {
+    if (slot < 0 || (hair[slot] ?? 0) < 5) continue;
+    const choice = hair[slot];
+    const baseChoice = ART_HAIR[choice] ?? 0;
+    const scale = size * width / 48;
+    if (artwork === "grounding0") {
+      g.save();
+      g.translate(pad, pad);
+      g.scale(width / 286, height / 109);
+      g.globalCompositeOperation = "destination-out";
+      g.fill(new Path2D("M105 0 H195 V55 H105 Z"));
+      g.restore();
+    }
+    g.save();
+    g.translate(pad + cx * width, pad + cy * height);
+    g.scale(scale * facing, scale);
+    g.lineJoin = "round";
+    g.lineCap = "round";
+    const oldHair = new Path2D(HEAD_STYLES[baseChoice][0]);
+    g.globalCompositeOperation = "destination-out";
+    g.lineWidth = 2.5;
+    g.save();
+    g.scale(2.3, 2.3);
+    g.fill(oldHair);
+    g.stroke(oldHair);
+    g.restore();
+    g.restore();
+
+    g.save();
+    g.translate(pad + cx * width, pad + cy * height);
+    g.scale(scale * facing, scale);
+    g.lineJoin = "round";
+    g.lineCap = "round";
+    const openDive = artwork === "grounding0";
+    const jackal = artwork === "jackal";
+    if (choice === 5 && !jackal) g.translate(9, -2);
+    const silhouetteScale = choice === 5 ? (openDive ? 1 : jackal ? 0.55 : 0.95) : choice === 7 || choice === 8 ? 1.1 : choice === 9 ? (jackal ? 0.52 : 0.95) : 1;
+    g.scale(silhouetteScale, silhouetteScale);
+    const [outer, detail] = HEAD_STYLES[choice];
+    const newHair = new Path2D(outer);
+    g.fillStyle = "#252b28";
+    g.strokeStyle = "#d4ddd4";
+    g.lineWidth = 1.3;
+    g.fill(newHair);
+    g.stroke(newHair);
+    g.lineWidth = 1.05;
+    g.stroke(new Path2D(detail));
+    g.restore();
+  }
 }
 
 async function storyPainter(kind: StoryKind, req: CutawayRequest): Promise<Painter> {
@@ -194,7 +253,7 @@ async function bigHitPainter(req: CutawayRequest): Promise<Painter> {
   const defender = req.b && req.b.hair !== req.a.hair ? variant(req.b.hair) : runner;
   const { start, contact, end } = TIMING;
 
-  const player = (ctx: CanvasRenderingContext2D, image: HTMLCanvasElement, build: number, x: number, y: number, side: number, lean: number, isDefender: boolean) => {
+  const player = (ctx: CanvasRenderingContext2D, image: HTMLCanvasElement, build: number, goggles: boolean, x: number, y: number, side: number, lean: number, isDefender: boolean) => {
     const height = isDefender ? 207 : 218;
     const width = ((height * sprite.width) / sprite.height) * build;
     ctx.save();
@@ -202,6 +261,31 @@ async function bigHitPainter(req: CutawayRequest): Promise<Painter> {
     ctx.scale(side, 1);
     ctx.rotate(lean);
     ctx.drawImage(image, -width * 0.5, -height * 0.69, width, height);
+    if (goggles) {
+      const gy = -height * 0.615;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 3.2;
+      ctx.beginPath();
+      ctx.moveTo(width * 0.015, gy - height * 0.003);
+      ctx.lineTo(-width * 0.055, gy - height * 0.014);
+      ctx.moveTo(width * 0.205, gy - height * 0.003);
+      ctx.lineTo(width * 0.245, gy - height * 0.014);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(220, 226, 222, 0.2)";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(width * 0.015, gy - height * 0.018);
+      ctx.quadraticCurveTo(width * 0.11, gy - height * 0.04, width * 0.205, gy - height * 0.018);
+      ctx.quadraticCurveTo(width * 0.22, gy, width * 0.2, gy + height * 0.022);
+      ctx.quadraticCurveTo(width * 0.14, gy + height * 0.033, width * 0.11, gy + height * 0.01);
+      ctx.quadraticCurveTo(width * 0.08, gy + height * 0.033, width * 0.02, gy + height * 0.022);
+      ctx.quadraticCurveTo(0, gy, width * 0.015, gy - height * 0.018);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
     if (!isDefender) {
       ctx.save();
       ctx.translate(width * 0.22, -height * 0.29);
@@ -264,8 +348,8 @@ async function bigHitPainter(req: CutawayRequest): Promise<Painter> {
     oval(ctx, dx, 381 + recoil * 12, 79, 8, "#0b110e");
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    player(ctx, runner, req.a.build, rx, ry, 1, 0.1 - 0.3 * recoil, false);
-    player(ctx, defender, req.b?.build ?? 1, dx, dy, -1, 0.23 + 0.65 * contactMotion - 0.18 * recoil, true);
+    player(ctx, runner, req.a.build, !!req.a.goggles, rx, ry, 1, 0.1 - 0.3 * recoil, false);
+    player(ctx, defender, req.b?.build ?? 1, !!req.b?.goggles, dx, dy, -1, 0.23 + 0.65 * contactMotion - 0.18 * recoil, true);
     if (impact && after < 0.28) {
       ctx.globalAlpha = 1 - after / 0.28;
       for (const [a, l] of [[-2.7, 34], [-1.95, 51], [-1.4, 24], [-0.72, 36], [0.58, 27], [1.23, 32], [2.28, 22]]) {

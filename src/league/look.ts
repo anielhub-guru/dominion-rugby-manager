@@ -2,8 +2,20 @@ import type { Gender, Look, Player } from "../engine/types";
 import { hashSeed } from "../engine/rng";
 
 /** Hairstyle names, indexed by Look.portrait. Index 4 (short twists) has no usable art and is never picked. */
-export const HAIR = ["Cornrows", "Natural puff", "Sports hijab", "Side-part bob", "Short twists", "Braided bun"] as const;
-export const VISIBLE_HAIR = [0, 1, 2, 3, 5] as const;
+export const HAIR = [
+  "Cornrows",
+  "Natural puff",
+  "Sports hijab",
+  "Side-part bob",
+  "Short twists",
+  "Braided bun",
+  "Curly afro",
+  "Tapered natural crop",
+  "Twin Dutch braids",
+  "Tied-back locs",
+  "Curly high ponytail",
+] as const;
+export const VISIBLE_HAIR = [0, 1, 2, 3, 5, 6, 7, 8, 9, 10] as const;
 /** Build name and the horizontal scale it applies to the portrait. */
 export const BUILDS: readonly (readonly [string, number])[] = [["Lean", 0.97], ["Balanced", 1], ["Broad", 1.035]];
 
@@ -13,6 +25,7 @@ export function makeLook(key: string): Look {
     portrait: VISIBLE_HAIR[hashSeed(key, "hair") % VISIBLE_HAIR.length],
     build: hashSeed(key, "build") % BUILDS.length,
     face: hashSeed(key, "face") % 2,
+    goggles: false,
     eyes: 0,
     nose: 0,
     lips: 0,
@@ -26,4 +39,4 @@ export function lookOf(p: Player, gender: Gender): Look | null {
   return p.look ?? makeLook(`${p.id}|${p.name}`);
 }
 
-export const describeLook = (l: Look) => `${HAIR[l.portrait]} · ${BUILDS[l.build][0]}`;
+export const describeLook = (l: Look) => `${HAIR[l.portrait]} · ${BUILDS[l.build][0]}${l.goggles ? " · Rugby goggles" : ""}`;

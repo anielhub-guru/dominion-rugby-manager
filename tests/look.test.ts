@@ -10,6 +10,7 @@ describe("player looks", () => {
         expect(VISIBLE_HAIR).toContain(l.portrait);
         expect(l.build).toBeLessThan(BUILDS.length);
         expect([0, 1]).toContain(l.face);
+        expect(l.goggles).toBe(false);
       }
     }
     const t = generateTeams(7, "women")[0];
@@ -29,5 +30,10 @@ describe("player looks", () => {
     const old = { ...generateTeams(3, "women")[0].players[0], look: undefined };
     expect(lookOf(old, "women")).toEqual(makeLook(`${old.id}|${old.name}`));
     expect(lookOf(old, "men")).toBeNull();
+  });
+  it("keeps goggles optional for old saves", () => {
+    const player = generateTeams(3, "women")[0].players[0];
+    const { goggles: _goggles, ...oldLook } = player.look!;
+    expect(lookOf({ ...player, look: oldLook }, "women")?.goggles).toBeUndefined();
   });
 });

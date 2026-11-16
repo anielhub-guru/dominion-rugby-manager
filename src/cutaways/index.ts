@@ -34,7 +34,7 @@ function loadSettings(): Settings {
 /** Old match logs may lack the second stamp. */
 const secOf = (e: MatchEvent) => e.sec ?? Math.max(0, (e.minute - 1) * 60);
 
-const athlete = (look: Look): Athlete => ({ hair: LAB_HAIR[look.portrait] ?? 0, build: BUILDS[look.build][1] });
+const athlete = (look: Look): Athlete => ({ hair: LAB_HAIR[look.portrait] ?? 0, build: BUILDS[look.build][1], goggles: !!look.goggles });
 
 /** Which cutaways suit an event, in the order they are chosen from. */
 export function kindsFor(ev: MatchEvent): Kind[] {
