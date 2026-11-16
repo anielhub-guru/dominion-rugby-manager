@@ -120,12 +120,53 @@ async function composite(spec: (typeof STORY)[StoryKind], pose: number, a: Athle
   return bounds ? { canvas, bounds } : null;
 }
 
+/**
+ * The open dive's curly afro: the old braids are cleared only around the skull (so the shoulder and face are untouched),
+ * and the afro is drawn behind what is left, so it frames the head instead of covering the face.
+ * The polygon is in the 403 x 153 pixel space of the dive artwork.
+ */
+const DIVE_HAIR_CLEAR: readonly (readonly [number, number])[] = [[180, 0], [312, 0], [304, 18], [290, 20], [278, 27], [268, 33], [262, 42], [250, 44], [235, 43], [226, 50], [185, 53]];
+function afroBehindHead(g: CanvasRenderingContext2D, width: number, height: number, pad: number, cx: number, cy: number, scale: number): void {
+  g.save();
+  g.translate(pad, pad);
+  g.scale(width / 403, height / 153);
+  g.globalCompositeOperation = "destination-out";
+  g.beginPath();
+  DIVE_HAIR_CLEAR.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+  g.closePath();
+  g.fill();
+  g.restore();
+
+  g.save();
+  g.translate(pad + cx * width, pad + cy * height);
+  g.scale(scale, scale);
+  g.translate(-3, 0);
+  g.scale(0.95, 0.95);
+  g.lineJoin = "round";
+  g.lineCap = "round";
+  g.globalCompositeOperation = "destination-over"; // first drawn is frontmost: curls, then outline, then fill
+  const [outer, detail] = HEAD_STYLES[5];
+  const shape = new Path2D(outer);
+  g.strokeStyle = "#d4ddd4";
+  g.lineWidth = 1.05;
+  g.stroke(new Path2D(detail));
+  g.lineWidth = 1.3;
+  g.stroke(shape);
+  g.fillStyle = "#252b28";
+  g.fill(shape);
+  g.restore();
+}
+
 function drawStoryHair(g: CanvasRenderingContext2D, width: number, height: number, pad: number, heads: readonly HeadMark[], hair: readonly number[], artwork: string): void {
   for (const [cx, cy, size, facing, slot] of heads) {
     if (slot < 0 || (hair[slot] ?? 0) < 5) continue;
     const choice = hair[slot];
     const baseChoice = ART_HAIR[choice] ?? 0;
     const scale = size * width / 48;
+    if (artwork === "grounding0" && choice === 5) {
+      afroBehindHead(g, width, height, pad, cx, cy, scale);
+      continue;
+    }
     if (artwork === "grounding0") {
       g.save();
       g.translate(pad, pad);
@@ -154,10 +195,9 @@ function drawStoryHair(g: CanvasRenderingContext2D, width: number, height: numbe
     g.scale(scale * facing, scale);
     g.lineJoin = "round";
     g.lineCap = "round";
-    const openDive = artwork === "grounding0";
     const jackal = artwork === "jackal";
-    if (choice === 5 && !jackal) g.translate(openDive ? -4 : 9, openDive ? -8 : -2);
-    const silhouetteScale = choice === 5 ? (openDive ? 0.9 : jackal ? 0.55 : 0.95) : choice === 7 || choice === 8 ? 1.1 : choice === 9 ? (jackal ? 0.52 : 0.95) : 1;
+    if (choice === 5 && !jackal) g.translate(9, -2);
+    const silhouetteScale = choice === 5 ? (jackal ? 0.55 : 0.95) : choice === 7 || choice === 8 ? 1.1 : choice === 9 ? (jackal ? 0.52 : 0.95) : 1;
     g.scale(silhouetteScale, silhouetteScale);
     const [outer, detail] = HEAD_STYLES[choice];
     const newHair = new Path2D(outer);
