@@ -33,7 +33,9 @@ export interface EraProspect {
   /** Offseasons left in which an AI club may sign an unattached prospect. */
   windowLeft?: number;
   /** One line per season spent on a roster. */
-  seasons: { season: number; clubId: string; apps: number }[];
+  seasons: { season: number; clubId: string; apps: number; points?: number }[];
+  /** The retirement entry, kept for the profile. */
+  summary?: string;
   /** Sparse permanent facts. Text is built from these when shown. */
   chronicle: ChronicleEntry[];
 }
@@ -89,9 +91,9 @@ export const joinedElsewhereNews = (name: string, originName: string, introduced
   `A first chance elsewhere. ${name}, not signed by ${originName} in the season ${introducedSeason} intake, joins ${clubName}.`;
 
 /** The season just played, recorded for a player on a roster. Returns news lines and adds chronicle facts. */
-export function recordEraSeason(r: EraProspect, season: number, clubId: string, apps: number, matches: number, clubName: string): string[] {
+export function recordEraSeason(r: EraProspect, season: number, clubId: string, apps: number, matches: number, clubName: string, points = 0): string[] {
   const earlier = r.seasons.filter((x) => x.season < season);
-  r.seasons.push({ season, clubId, apps });
+  r.seasons.push({ season, clubId, apps, points });
   const before = earlier.reduce((t, x) => t + x.apps, 0);
   const prev = earlier[earlier.length - 1];
   if (prev && prev.clubId !== clubId) r.chronicle.push({ season, key: "joined", clubId });

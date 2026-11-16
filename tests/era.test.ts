@@ -58,6 +58,7 @@ describe("era prospects", () => {
     expect(r.chronicle.map((c) => c.key)).toEqual(expect.arrayContaining(["introduced", "joined", "debut", "first-regular-season"]));
     const line = retirementNews(r, 32, (id) => id);
     expect(line).toContain("Daniel Okoro retires at 32");
+    expect(r.seasons[2].points).toBe(0);
     expect(line).not.toMatch(/determined|disappoint|legend|furious/i);
   });
 

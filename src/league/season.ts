@@ -795,7 +795,7 @@ export function startNextSeason(prev: SeasonState): SeasonState {
     if (e.status !== "playing") continue;
     const club = state.teams.find((t) => t.players.some((p) => p.id === e.id));
     if (!club) e.status = "closed";
-    else news.push(...recordEraSeason(e, lastSeason, club.id, played[e.id]?.apps ?? 0, matches, club.name));
+    else news.push(...recordEraSeason(e, lastSeason, club.id, played[e.id]?.apps ?? 0, matches, club.name, played[e.id]?.points ?? 0));
   }
   // Season finances: prize money for the finishing position, less the wage bill.
   const prize = prizeFor(finish);
@@ -838,7 +838,8 @@ export function startNextSeason(prev: SeasonState): SeasonState {
       era.status = "retired";
       era.chronicle.push({ season: lastSeason, key: "retired", value: r.age });
       eraRetired.add(r.id);
-      news.push(retirementNews(era, r.age, (id) => teamById(state, id).name));
+      era.summary = retirementNews(era, r.age, (id) => teamById(state, id).name);
+      news.push(era.summary);
     }
     // Long careers are remembered by the club, whoever is managing it.
     for (const r of out) {

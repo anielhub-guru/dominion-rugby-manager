@@ -1,5 +1,7 @@
 import { h } from "../dom";
 import { LEGEND_MIN_SEASONS, RECORD_KEYS, RECORD_META } from "../league/history";
+import { chronicleLines, type EraProspect } from "../league/era";
+import { overall } from "../league/teams";
 import { isSeasonOver, seasonRecordFor, teamById, type SeasonRecord, type SeasonState } from "../league/season";
 
 const name = (s: SeasonState, id?: string) => (id ? teamById(s, id).name : "-");
@@ -60,5 +62,32 @@ export function clubCard(s: SeasonState, clubId: string, pick: (id: string) => v
   sec.append(h("h2", { class: "sub" }, "Retired legends"));
   if (!legends.length) sec.append(h("div", { class: "hint" }, `Players who retire after ${LEGEND_MIN_SEASONS} or more seasons are remembered here, by the club they retired from.`));
   else sec.append(table(["Player", "Role", "Retired", "Seasons", "Apps", "Points", "Tries", "Tackles"], legends.map((l) => [l.name, l.role, `Season ${l.season}, age ${l.age}`, String(l.seasons), String(l.apps), String(l.points), String(l.tries), String(l.tackles)])));
+  return sec;
+}
+
+/** Where a followed player is now, as a fact. */
+function whereNow(s: SeasonState, e: EraProspect): string {
+  const club = s.teams.find((t) => t.players.some((p) => p.id === e.id));
+  if (e.status === "playing" && club) return `${club.name}`;
+  if (e.status === "intake") return "On the youth shortlist";
+  if (e.status === "unattached") return "Without a club";
+  if (e.status === "retired") return "Retired";
+  return "No longer followed";
+}
+
+/** The careers Dominion follows: a sparse chronicle and the season-by-season record, nothing more. */
+export function followedCard(s: SeasonState): HTMLElement {
+  const sec = h("section", { class: "card" }, h("h2", {}, "Followed careers"));
+  const list = [...(s.eraProspects ?? [])].sort((a, b) => b.introducedSeason - a.introducedSeason);
+  if (!list.length) return (sec.append(h("div", { class: "hint" }, "Now and then a youth intake marks one prospect. Dominion follows that career and keeps its facts here, whatever happens to them.")), sec);
+  const nameOf = (id: string) => teamById(s, id).name;
+  for (const e of list) {
+    const p = s.teams.flatMap((t) => t.players).find((x) => x.id === e.id);
+    const facts = [e.role, whereNow(s, e), ...(p ? [`age ${p.age}`, `overall ${overall(p)}`] : [])].join(" · ");
+    sec.append(h("h2", { class: "sub" }, e.name), h("div", { class: "hint" }, facts));
+    sec.append(h("ul", { class: "chronicle" }, ...chronicleLines(e, nameOf).map((l) => h("li", {}, l))));
+    if (e.seasons.length) sec.append(table(["Season", "Club", "Apps", "Points"], e.seasons.map((x) => [`Season ${x.season}`, nameOf(x.clubId), String(x.apps), String(x.points ?? 0)])));
+    if (e.summary) sec.append(h("div", { class: "hint" }, e.summary));
+  }
   return sec;
 }
