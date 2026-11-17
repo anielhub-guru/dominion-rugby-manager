@@ -3,7 +3,8 @@
 // The multi page holds the first nine cutaways; the solo page holds the interception, kicking and
 // kick-and-chase art. The lab pages keep their art as base64 arrays. Only the art is extracted: the framing and timing
 // tables live in src/cutaways/data.ts and are edited by hand.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 
 const [src, soloSrc] = process.argv.slice(2);
 if (!src || !soloSrc) {
@@ -70,5 +71,21 @@ save("sprite", sprite);
 for (const [kind, [original, look]] of Object.entries(KINDS)) {
   save(`${kind}-0`, original);
   for (let l = 0; l < 4; l++) save(`${kind}-${l + 1}`, look(l));
+}
+for (let pose = 0; pose < 3; pose++) {
+  const version = pose + 1;
+  for (const hair of [0, 5, 6, 7, 8, 9]) {
+    const suffix = hair ? `-h${hair}` : "";
+    copyFileSync(resolve(dirname(src), `cutout-variants/injury-v${version}${suffix}.webp`), new URL(`injury${pose}-${hair}.webp`, out));
+    count++;
+  }
+}
+// Directly drawn hairstyles 5-9 for the poses the lab redrew. grounding-v1..v3 are the game's grounding poses 0..2.
+const DIRECT = [["grounding0", "grounding-v1"], ["grounding1", "grounding-v2"], ["grounding2", "grounding-v3"], ["kickchase", "kickchase-v1"], ["waist", "waist-v1"]];
+for (const [name, file] of DIRECT) {
+  for (const hair of [5, 6, 7, 8, 9]) {
+    copyFileSync(resolve(dirname(src), `cutout-variants/${file}-h${hair}.webp`), new URL(`${name}-${hair}.webp`, out));
+    count++;
+  }
 }
 console.log(`Wrote ${count} images to src/cutaways/art`);

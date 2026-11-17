@@ -134,7 +134,7 @@ export class Cutaways {
     const { home, away } = this.host;
     if (this.settings.mode === "dots") return null;
     const kinds = kindsFor(ev);
-    // The injury cutaway is a placeholder with no artwork, so it shows in both leagues; every other kind is women's league art.
+    // Men's injury events retain the text fallback; all illustrated cutaways use the women's league artwork set.
     if (home.gender !== "women" && !kinds.includes("injury")) return null;
     const f = FREQUENCIES.find((x) => x.id === this.settings.freq) ?? FREQUENCIES[2];
     if (!kinds.length || this.shown >= f.max || secOf(ev) - this.lastSec < f.cooldown) return null;
@@ -144,7 +144,8 @@ export class Cutaways {
     let a: Player | undefined;
     let b: Player | undefined;
     if (kind === "injury") {
-      return { kind, a: { hair: 0, build: 1 }, mode: this.settings.mode, shake: false, note: ev.player };
+      if (home.gender !== "women") return { kind, a: { hair: 0, build: 1 }, mode: this.settings.mode, shake: false, note: ev.player, placeholder: true };
+      a = this.player(ev.team === 0 ? home : away, { id: ev.pid, name: ev.player });
     }
     if (kind === "card") {
       a = this.player(ev.team === 0 ? home : away, { id: ev.pid });
@@ -171,7 +172,7 @@ export class Cutaways {
     const lb = b && lookOf(b, home.gender);
     // A card shows the referee on the left; she is nobody in particular.
     const second = lb ? athlete(lb) : kind === "card" ? { hair: Math.floor(rand(ev, 44) * 5), build: 1 } : undefined;
-    return { kind, a: athlete(la), b: second, pose: kind === "grounding" ? Math.floor(rand(ev, 45) * 3) : undefined, mode: this.settings.mode, shake: this.settings.shake };
+    return { kind, a: athlete(la), b: second, pose: kind === "grounding" || kind === "injury" ? Math.floor(rand(ev, 45) * 3) : undefined, mode: this.settings.mode, shake: kind === "injury" ? false : this.settings.shake };
   }
 
   /** Plays the cutaway for an event, if there is one. Resolves when it has finished, or at once if there is none. */

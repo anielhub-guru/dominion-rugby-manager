@@ -22,6 +22,8 @@ export interface CutawayRequest {
   shake: boolean;
   /** Text for a placeholder cutaway, such as the injured player's name. */
   note?: string;
+  /** Keeps the text-only fallback for leagues without matching artwork. */
+  placeholder?: boolean;
 }
 
 // The cutaway is drawn in the lab's 960 x 430 space, below a 45px header strip we do not use.
@@ -94,16 +96,24 @@ function oval(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, r
   ctx.fill();
 }
 
+/** Poses whose lab artwork includes every hairstyle 5-9 as a full redraw. */
+const DIRECT_HAIR: ReadonlySet<string> = new Set(["grounding", "kickchase", "waist"]);
+
 /** A pose with the second player's head and shoulders swapped in when her hairstyle differs. */
 async function composite(spec: (typeof STORY)[StoryKind], pose: number, a: Athlete, b?: Athlete): Promise<{ canvas: HTMLCanvasElement; bounds: Bounds } | null> {
   const name = spec.art(pose);
-  const baseHair = ART_HAIR[a.hair] ?? 0;
-  const otherHair = b ? ART_HAIR[b.hair] ?? 0 : baseHair;
+  const injury = name.startsWith("injury");
+  const direct = DIRECT_HAIR.has(name.replace(/\d+$/, ""));
+  const directInjury = injury && a.hair >= 5;
+  // Hairstyles 5-9 are drawn straight into these poses; elsewhere they are vector overlays on the original art.
+  const hairFile = (hair: number): number => (direct || injury) && hair >= 5 ? hair : ART_HAIR[hair] ?? 0;
+  const baseHair = injury && !directInjury ? 0 : hairFile(a.hair);
+  const otherHair = b ? hairFile(b.hair) : baseHair;
   const base = await load(`${name}-${baseHair}`);
   const regions = b && otherHair !== baseHair ? spec.regions(pose) : [];
   const other = regions.length ? await load(`${name}-${otherHair}`) : null;
   const heads = STORY_HEADS[name.startsWith("grounding") ? "grounding" : name as StoryKind]?.[pose] ?? STORY_HEADS[name as StoryKind]?.[0] ?? [];
-  const decorated = a.hair >= 5 || !!b && b.hair >= 5;
+  const decorated = injury ? !directInjury : !direct && (a.hair >= 5 || !!b && b.hair >= 5);
   const pad = decorated ? Math.ceil(Math.max(8, ...heads.map(([, , size]) => size * base.naturalWidth * 2.5))) : 0;
   const [canvas, g] = newCanvas(base.naturalWidth + 2 * pad, base.naturalHeight + 2 * pad);
   g.drawImage(base, pad, pad);
@@ -115,7 +125,7 @@ async function composite(spec: (typeof STORY)[StoryKind], pose: number, a: Athle
       g.drawImage(other, x * other.naturalWidth, y * other.naturalHeight, w * other.naturalWidth, h * other.naturalHeight, left, top, width, height);
     }
   }
-  if (decorated) drawStoryHair(g, base.naturalWidth, base.naturalHeight, pad, heads, [a.hair, b?.hair ?? a.hair], name);
+  if (decorated) drawStoryHair(g, base.naturalWidth, base.naturalHeight, pad, heads, [a.hair, b?.hair ?? a.hair], name, injury);
   const bounds = opaqueBounds(g, canvas.width, canvas.height);
   return bounds ? { canvas, bounds } : null;
 }
@@ -157,9 +167,9 @@ function afroBehindHead(g: CanvasRenderingContext2D, width: number, height: numb
   g.restore();
 }
 
-function drawStoryHair(g: CanvasRenderingContext2D, width: number, height: number, pad: number, heads: readonly HeadMark[], hair: readonly number[], artwork: string): void {
+function drawStoryHair(g: CanvasRenderingContext2D, width: number, height: number, pad: number, heads: readonly HeadMark[], hair: readonly number[], artwork: string, allowOriginalStyles = false): void {
   for (const [cx, cy, size, facing, slot] of heads) {
-    if (slot < 0 || (hair[slot] ?? 0) < 5) continue;
+    if (slot < 0 || !allowOriginalStyles && (hair[slot] ?? 0) < 5) continue;
     const choice = hair[slot];
     const baseChoice = ART_HAIR[choice] ?? 0;
     const scale = size * width / 48;
@@ -505,10 +515,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, paint: Painter, field: 
 }
 
 /** Loads the artwork for a request and returns what is needed to draw it. Rejects if the art is missing. */
-/**
- * PLACEHOLDER for the injury cutaway: there is no artwork for it yet. It shows the pitch with a plain
- * card so the moment can be felt in play. Replace it with real art (see src/cutaways/README.md, "Art needed").
- */
+/** Text-only fallback used when the active league has no matching player artwork. */
 async function injuryPlaceholder(req: CutawayRequest): Promise<Painter> {
   return (ctx) => {
     pitchBackdrop(ctx);
@@ -532,7 +539,7 @@ async function injuryPlaceholder(req: CutawayRequest): Promise<Painter> {
 }
 
 export async function prepare(req: CutawayRequest): Promise<Painter> {
-  if (req.kind === "injury") return injuryPlaceholder(req);
+  if (req.kind === "injury" && req.placeholder) return injuryPlaceholder(req);
   return req.kind === "bighit" ? bigHitPainter(req) : storyPainter(req.kind, req);
 }
 

@@ -33,12 +33,6 @@ the same cutaways.
 Add the art to the extract script, a `STORY` entry in `data.ts`, a `Kind` and a `CHANCE`, and return it
 from `kindsFor` in `index.ts`. If it shows the action itself rather than a result, add it to `BEFORE`.
 
-## Art needed (placeholders)
+## Injury artwork
 
-These cutaways work, but are drawn as plain placeholders until real artwork exists.
-
-| Kind | Fires on | What it shows now | What it should be |
-|---|---|---|---|
-| `injury` | An `injury` event: a player hurt in a tackle and replaced | A dark card on the pitch reading "PLAYER DOWN", the player's name and "Placeholder: injury cutaway art still to be drawn". Shown in both leagues, because there is no art to be gendered. | A player down on the turf, a teammate or the physio kneeling beside them, the hurt player's own hairstyle. Plays after the arena scene (not in `BEFORE`). |
-
-The placeholder painter is `injuryPlaceholder` in `render.ts`. To replace it: add the pose to the extract script and a `STORY` entry in `data.ts`, add `"injury"` to `StoryKind` there (it is excluded now), remove the `injury` branch in `prepare` (`render.ts`) and the early return and the any-league exception in `plan` (`index.ts`), then follow "Adding a new cutaway" above.
+`injury` has three illustrated poses: ankle treatment, an on-field leg assessment, and a reference-led assisted walk from the field. Women's matches use the injured player's hairstyle; men's matches retain the text-only fallback until matching artwork exists. The cutaway plays after the arena scene and is not in `BEFORE`.

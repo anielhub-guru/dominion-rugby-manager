@@ -12,8 +12,9 @@ describe("illustrated cutaways", () => {
   it("has artwork for every kind, pose and lab hairstyle", () => {
     expect(art("sprite")).toBe(true);
     for (const [kind, spec] of Object.entries(STORY)) {
-      for (const pose of kind === "grounding" ? [0, 1, 2] : [0]) {
-        for (let hair = 0; hair <= 4; hair++) expect(art(`${spec.art(pose)}-${hair}`), `${kind} pose ${pose} hair ${hair}`).toBe(true);
+      for (const pose of kind === "grounding" || kind === "injury" ? [0, 1, 2] : [0]) {
+        const hairs = kind === "injury" ? [0, 5, 6, 7, 8, 9] : [0, 1, 2, 3, 4, ...(["grounding", "kickchase", "waist"].includes(kind) ? [5, 6, 7, 8, 9] : [])];
+        for (const hair of hairs) expect(art(`${spec.art(pose)}-${hair}`), `${kind} pose ${pose} hair ${hair}`).toBe(true);
       }
     }
   });
@@ -31,8 +32,7 @@ describe("illustrated cutaways", () => {
     for (const [kind, chance] of Object.entries(CHANCE)) {
       expect(chance).toBeGreaterThan(0);
       expect(chance).toBeLessThanOrEqual(1);
-      // "injury" is a placeholder with no artwork yet, so it has no STORY entry.
-      expect(kind === "bighit" || kind === "injury" || kind in STORY).toBe(true);
+      expect(kind === "bighit" || kind in STORY).toBe(true);
     }
   });
 

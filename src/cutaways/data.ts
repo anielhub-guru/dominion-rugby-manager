@@ -6,8 +6,8 @@
 
 export type Transition = "diagonal" | "split" | "hard" | "dots";
 export type Kind = "bighit" | "grounding" | "celebration" | "lastditch" | "jackal" | "card" | "waist" | "double" | "ankle" | "intercept" | "goalmiss" | "goal" | "kickchase" | "huddle" | "pass" | "injury";
-/** Kinds drawn from the artwork in ./art. "injury" is a placeholder with no art yet (see the README). */
-export type StoryKind = Exclude<Kind, "bighit" | "injury">;
+/** Kinds drawn from the artwork in ./art. */
+export type StoryKind = Exclude<Kind, "bighit">;
 
 /** Seconds, on the lab's scene clock: contact is when the cutaway pose begins, end is when it settles. */
 export const TIMING = {
@@ -106,6 +106,11 @@ export const STORY_HEADS: Record<StoryKind, readonly (readonly HeadMark[])[]> = 
   double: [[[.520, .015, .115, 1, 0], [.310, .395, .115, 1, 1], [.735, .086, .120, -1, 1]]],
   ankle: [[[.823, .010, .109, 1, 0], [.278, .505, .105, 1, 1]]],
   huddle: [[[.565, .010, .230, 1, 0]]],
+  injury: [
+    [[.620, .310, .110, 1, 0]],
+    [[.860, .330, .080, 1, 0]],
+    [[.660, .020, .120, 1, 0]],
+  ],
 };
 
 /** Side-profile hair overlays used by every full-pose cutaway. */
@@ -181,6 +186,7 @@ export const STORY: Record<StoryKind, StorySpec> = {
   // The two kick-off cutaways: the captain calls the team in, and a winger shows for a pass.
   huddle: { art: () => "huddle", frame: BIG, regions: () => [], ground: 390, tilt: 0, bob: true },
   pass: { art: () => "pass", frame: { width: 360, height: 272, rise: 0, slide: 18 }, regions: () => [], ground: 390, tilt: 0 },
+  injury: { art: (pose) => `injury${pose}`, frame: { width: 410, height: 280, rise: 4, slide: 20 }, regions: () => [], ground: 390, tilt: 0 },
 };
 
 /** The original "big hit" is drawn from one sprite, with hair drawn on top. Paths are in the sprite's 152 x 260 space. */
