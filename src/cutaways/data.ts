@@ -162,6 +162,9 @@ export interface StorySpec {
   bob?: boolean;
 }
 
+/** Where the second athlete's head and shoulders sit in each jackal version. */
+const JACKAL_REGIONS: readonly Region[] = [[0.50, 0, 0.25, 0.30], [0.05, 0, 0.26, 0.32], [0.47, 0, 0.24, 0.28]];
+
 const BIG: Frame = { width: 450, height: 280, rise: 5, slide: 30 };
 
 export const STORY: Record<StoryKind, StorySpec> = {
@@ -175,7 +178,7 @@ export const STORY: Record<StoryKind, StorySpec> = {
   },
   celebration: { art: () => "celebration", frame: { width: 360, height: 276, rise: 6, slide: 6 }, regions: () => [[0.59, 0.07, 0.41, 0.3]], ground: 390, tilt: 0 },
   lastditch: { art: () => "lastditch", frame: { width: 385, height: 260, rise: 13, slide: 32 }, regions: () => [[0.28, 0.27, 0.4, 0.29]], ground: 390, tilt: 0 },
-  jackal: { art: (pose) => (pose ? `jackal${pose}` : "jackal"), frame: { width: 410, height: 238, rise: 6, slide: 12 }, regions: () => [[0.49, 0, 0.28, 0.39]], ground: 390, tilt: 0 },
+  jackal: { art: (pose) => (pose ? `jackal${pose}` : "jackal"), frame: { width: 410, height: 238, rise: 6, slide: 12 }, regions: (pose): readonly Region[] => [JACKAL_REGIONS[pose] ?? JACKAL_REGIONS[0]], ground: 390, tilt: 0 },
   card: { art: () => "card", frame: { width: 360, height: 275, rise: 0, slide: 0 }, regions: () => [[0, 0.09, 0.39, 0.24]], ground: 390, tilt: 0 },
   waist: { art: (pose) => (pose ? `waist${pose}` : "waist"), frame: BIG, regions: () => [[0.3, 0.2, 0.34, 0.3]], ground: 390, tilt: 0 },
   double: {

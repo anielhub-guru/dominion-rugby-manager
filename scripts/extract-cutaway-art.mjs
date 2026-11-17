@@ -92,10 +92,11 @@ for (const [name, file] of DIRECT) {
 const variants = resolve(dirname(src), "cutout-variants");
 const copy = (from, to) => { copyFileSync(resolve(variants, `${from}.webp`), new URL(`${to}.webp`, out)); count++; };
 for (const v of [1, 2]) {
-  copy(`jackal-v${v + 1}`, `jackal${v}-0`);
   for (const kind of ["kickchase", "waist"]) {
     copy(`${kind}-v${v + 1}`, `${kind}${v}-0`);
     for (let hair = 1; hair <= 9; hair++) copy(`${kind}-v${v + 1}-h${hair}`, `${kind}${v}-${hair}`);
   }
 }
+// Jackal has every hairstyle drawn in each of its three versions; these replace the older hairstyle 0-4 art.
+for (let v = 1; v <= 3; v++) for (let hair = 0; hair <= 9; hair++) copy(`jackal-v${v}-h${hair}`, `jackal${v > 1 ? v - 1 : ""}-${hair}`);
 console.log(`Wrote ${count} images to src/cutaways/art`);

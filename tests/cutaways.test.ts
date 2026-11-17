@@ -13,7 +13,7 @@ describe("illustrated cutaways", () => {
     expect(art("sprite")).toBe(true);
     for (const [kind, spec] of Object.entries(STORY)) {
       for (const pose of Array.from({ length: VERSIONS[kind as keyof typeof VERSIONS] ?? 1 }, (_, i) => i)) {
-        const hairs = kind === "injury" || kind === "jackal" && pose ? (kind === "injury" ? [0, 5, 6, 7, 8, 9] : [0]) : [0, 1, 2, 3, 4, ...(["grounding", "kickchase", "waist"].includes(kind) ? [5, 6, 7, 8, 9] : [])];
+        const hairs = kind === "injury" ? [0, 5, 6, 7, 8, 9] : [0, 1, 2, 3, 4, ...(["grounding", "kickchase", "waist", "jackal"].includes(kind) ? [5, 6, 7, 8, 9] : [])];
         for (const hair of hairs) expect(art(`${spec.art(pose)}-${hair}`), `${kind} pose ${pose} hair ${hair}`).toBe(true);
       }
     }
