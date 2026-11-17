@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { generateTeams } from "../src/league/teams";
 import { simulateMatch } from "../src/engine/match";
 import { HAIR } from "../src/league/look";
-import { ART_HAIR, BEFORE, CHANCE, HEAD_STYLES, LAB_HAIR, STORY, STORY_HEADS } from "../src/cutaways/data";
+import { ART_HAIR, BEFORE, CHANCE, HEAD_STYLES, LAB_HAIR, STORY, VERSIONS, STORY_HEADS } from "../src/cutaways/data";
 import { kindsFor } from "../src/cutaways";
 
 const art = (name: string) => existsSync(new URL(`../src/cutaways/art/${name}.webp`, import.meta.url));
@@ -12,8 +12,8 @@ describe("illustrated cutaways", () => {
   it("has artwork for every kind, pose and lab hairstyle", () => {
     expect(art("sprite")).toBe(true);
     for (const [kind, spec] of Object.entries(STORY)) {
-      for (const pose of kind === "grounding" || kind === "injury" ? [0, 1, 2] : [0]) {
-        const hairs = kind === "injury" ? [0, 5, 6, 7, 8, 9] : [0, 1, 2, 3, 4, ...(["grounding", "kickchase", "waist"].includes(kind) ? [5, 6, 7, 8, 9] : [])];
+      for (const pose of Array.from({ length: VERSIONS[kind as keyof typeof VERSIONS] ?? 1 }, (_, i) => i)) {
+        const hairs = kind === "injury" || kind === "jackal" && pose ? (kind === "injury" ? [0, 5, 6, 7, 8, 9] : [0]) : [0, 1, 2, 3, 4, ...(["grounding", "kickchase", "waist"].includes(kind) ? [5, 6, 7, 8, 9] : [])];
         for (const hair of hairs) expect(art(`${spec.art(pose)}-${hair}`), `${kind} pose ${pose} hair ${hair}`).toBe(true);
       }
     }

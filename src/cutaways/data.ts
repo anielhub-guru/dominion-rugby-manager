@@ -74,6 +74,9 @@ export const FREQUENCIES: readonly { id: Frequency; label: string; chance: numbe
   { id: "lots", label: "Lots", chance: 4, max: 12, cooldown: 90 },
 ];
 
+/** How many artwork versions (poses) a kind has; one is picked at random each time. */
+export const VERSIONS: Partial<Record<StoryKind, number>> = { grounding: 3, injury: 3, jackal: 3, kickchase: 3, waist: 3 };
+
 /**
  * Game hairstyle (Look.portrait, see league/look.ts HAIR) to the lab's hairstyle number:
  * 0 original braided ponytail, 1 braided bun, 2 natural puff, 3 sports hijab, 4 bob cut,
@@ -95,14 +98,22 @@ export const STORY_HEADS: Record<StoryKind, readonly (readonly HeadMark[])[]> = 
   ],
   celebration: [[[.192, .110, .151, 1, 0], [.815, .127, .151, -1, 1]]],
   lastditch: [[[.836, .007, .108, 1, 0], [.543, .358, .104, 1, 1]]],
-  jackal: [[[.142, .525, .114, -1, 0], [.622, .020, .115, -1, 1]]],
+  jackal: [
+    [[.142, .525, .114, -1, 0], [.622, .020, .115, -1, 1]],
+    [[.86, .48, .10, -1, 0], [.17, .10, .12, 1, 1]],
+    [[.16, .33, .12, 1, 0], [.58, .02, .11, 1, 1]],
+  ],
   intercept: [[[.475, .015, .140, 1, 0]]],
   goalmiss: [[[.714, .018, .315, 1, 0]]],
   card: [[[.156, .170, .165, 1, -1], [.808, .162, .170, -1, 0]]],
   pass: [[[.382, .014, .130, 1, 0]]],
-  kickchase: [[[.344, .014, .140, 1, 0]]],
+  kickchase: [[[.344, .014, .140, 1, 0]], [[.54, .05, .12, 1, 0]], [[.30, .06, .11, 1, 0]]],
   goal: [[[.350, .060, .220, 1, 0]]],
-  waist: [[[.655, .012, .125, 1, 0], [.501, .238, .125, 1, 1]]],
+  waist: [
+    [[.655, .012, .125, 1, 0], [.501, .238, .125, 1, 1]],
+    [[.79, .08, .12, 1, 0], [.46, .30, .11, 1, 1]],
+    [[.75, .05, .11, 1, 0], [.43, .26, .11, 1, 1]],
+  ],
   double: [[[.520, .015, .115, 1, 0], [.310, .395, .115, 1, 1], [.735, .086, .120, -1, 1]]],
   ankle: [[[.823, .010, .109, 1, 0], [.278, .505, .105, 1, 1]]],
   huddle: [[[.565, .010, .230, 1, 0]]],
@@ -164,9 +175,9 @@ export const STORY: Record<StoryKind, StorySpec> = {
   },
   celebration: { art: () => "celebration", frame: { width: 360, height: 276, rise: 6, slide: 6 }, regions: () => [[0.59, 0.07, 0.41, 0.3]], ground: 390, tilt: 0 },
   lastditch: { art: () => "lastditch", frame: { width: 385, height: 260, rise: 13, slide: 32 }, regions: () => [[0.28, 0.27, 0.4, 0.29]], ground: 390, tilt: 0 },
-  jackal: { art: () => "jackal", frame: { width: 410, height: 238, rise: 6, slide: 12 }, regions: () => [[0.49, 0, 0.28, 0.39]], ground: 390, tilt: 0 },
+  jackal: { art: (pose) => (pose ? `jackal${pose}` : "jackal"), frame: { width: 410, height: 238, rise: 6, slide: 12 }, regions: () => [[0.49, 0, 0.28, 0.39]], ground: 390, tilt: 0 },
   card: { art: () => "card", frame: { width: 360, height: 275, rise: 0, slide: 0 }, regions: () => [[0, 0.09, 0.39, 0.24]], ground: 390, tilt: 0 },
-  waist: { art: () => "waist", frame: BIG, regions: () => [[0.3, 0.2, 0.34, 0.3]], ground: 390, tilt: 0 },
+  waist: { art: (pose) => (pose ? `waist${pose}` : "waist"), frame: BIG, regions: () => [[0.3, 0.2, 0.34, 0.3]], ground: 390, tilt: 0 },
   double: {
     art: () => "double",
     frame: BIG,
@@ -182,7 +193,7 @@ export const STORY: Record<StoryKind, StorySpec> = {
   intercept: { art: () => "intercept", frame: { width: 310, height: 276, rise: 8, slide: 32 }, regions: () => [], ground: 390, tilt: 0 },
   goalmiss: { art: () => "goalmiss", frame: { width: 250, height: 270, rise: 0, slide: 0 }, regions: () => [], ground: 390, tilt: 0, posts: true },
   goal: { art: () => "goal", frame: { width: 290, height: 280, rise: 5, slide: 6 }, regions: () => [], ground: 390, tilt: 0, posts: true },
-  kickchase: { art: () => "kickchase", frame: { width: 385, height: 268, rise: 0, slide: 20 }, regions: () => [], ground: 390, tilt: 0 },
+  kickchase: { art: (pose) => (pose ? `kickchase${pose}` : "kickchase"), frame: { width: 385, height: 268, rise: 0, slide: 20 }, regions: () => [], ground: 390, tilt: 0 },
   // The two kick-off cutaways: the captain calls the team in, and a winger shows for a pass.
   huddle: { art: () => "huddle", frame: BIG, regions: () => [], ground: 390, tilt: 0, bob: true },
   pass: { art: () => "pass", frame: { width: 360, height: 272, rise: 0, slide: 18 }, regions: () => [], ground: 390, tilt: 0 },

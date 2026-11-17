@@ -88,4 +88,14 @@ for (const [name, file] of DIRECT) {
     count++;
   }
 }
+// Alternate versions: jackal has one drawing each; kick-chase and waist also have every hairstyle 1-9.
+const variants = resolve(dirname(src), "cutout-variants");
+const copy = (from, to) => { copyFileSync(resolve(variants, `${from}.webp`), new URL(`${to}.webp`, out)); count++; };
+for (const v of [1, 2]) {
+  copy(`jackal-v${v + 1}`, `jackal${v}-0`);
+  for (const kind of ["kickchase", "waist"]) {
+    copy(`${kind}-v${v + 1}`, `${kind}${v}-0`);
+    for (let hair = 1; hair <= 9; hair++) copy(`${kind}-v${v + 1}-h${hair}`, `${kind}${v}-${hair}`);
+  }
+}
 console.log(`Wrote ${count} images to src/cutaways/art`);

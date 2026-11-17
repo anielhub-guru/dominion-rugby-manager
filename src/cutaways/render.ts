@@ -96,27 +96,34 @@ function oval(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, r
   ctx.fill();
 }
 
-/** Poses whose lab artwork includes every hairstyle 5-9 as a full redraw. */
-const DIRECT_HAIR: ReadonlySet<string> = new Set(["grounding", "kickchase", "waist"]);
+/** The jackal drawings for hairstyles 1-4 carry a faint grey box; the lab clears anything this transparent. */
+function clearHaze(g: CanvasRenderingContext2D, width: number, height: number): void {
+  const pixels = g.getImageData(0, 0, width, height);
+  for (let i = 3; i < pixels.data.length; i += 4) if (pixels.data[i] < 48) pixels.data[i] = 0;
+  g.putImageData(pixels, 0, 0);
+}
 
 /** A pose with the second player's head and shoulders swapped in when her hairstyle differs. */
-async function composite(spec: (typeof STORY)[StoryKind], pose: number, a: Athlete, b?: Athlete): Promise<{ canvas: HTMLCanvasElement; bounds: Bounds } | null> {
+async function composite(kind: StoryKind, spec: (typeof STORY)[StoryKind], pose: number, a: Athlete, b?: Athlete): Promise<{ canvas: HTMLCanvasElement; bounds: Bounds } | null> {
   const name = spec.art(pose);
-  const injury = name.startsWith("injury");
-  const direct = DIRECT_HAIR.has(name.replace(/\d+$/, ""));
-  const directInjury = injury && a.hair >= 5;
-  // Hairstyles 5-9 are drawn straight into these poses; elsewhere they are vector overlays on the original art.
-  const hairFile = (hair: number): number => (direct || injury) && hair >= 5 ? hair : ART_HAIR[hair] ?? 0;
-  const baseHair = injury && !directInjury ? 0 : hairFile(a.hair);
-  const otherHair = b ? hairFile(b.hair) : baseHair;
-  const base = await load(`${name}-${baseHair}`);
-  const regions = b && otherHair !== baseHair ? spec.regions(pose) : [];
-  const other = regions.length ? await load(`${name}-${otherHair}`) : null;
-  const heads = STORY_HEADS[name.startsWith("grounding") ? "grounding" : name as StoryKind]?.[pose] ?? STORY_HEADS[name as StoryKind]?.[0] ?? [];
-  const decorated = injury ? !directInjury : !direct && (a.hair >= 5 || !!b && b.hair >= 5);
+  // A hairstyle drawn into this pose is used as is. Otherwise the nearest older art is used and the vector hair goes on top.
+  const pick = (hair: number): { file: number; overlay: boolean } => {
+    if (urlOf(`${name}-${hair}`)) return { file: hair, overlay: false };
+    const mapped = ART_HAIR[hair] ?? 0;
+    const file = urlOf(`${name}-${mapped}`) ? mapped : 0;
+    return { file, overlay: hair > 0 && (hair >= 5 || file !== mapped) };
+  };
+  const first = pick(a.hair);
+  const second = b ? pick(b.hair) : first;
+  const base = await load(`${name}-${first.file}`);
+  const regions = b && second.file !== first.file ? spec.regions(pose) : [];
+  const other = regions.length ? await load(`${name}-${second.file}`) : null;
+  const heads = STORY_HEADS[kind]?.[pose] ?? STORY_HEADS[kind]?.[0] ?? [];
+  const decorated = first.overlay || second.overlay;
   const pad = decorated ? Math.ceil(Math.max(8, ...heads.map(([, , size]) => size * base.naturalWidth * 2.5))) : 0;
   const [canvas, g] = newCanvas(base.naturalWidth + 2 * pad, base.naturalHeight + 2 * pad);
   g.drawImage(base, pad, pad);
+  if (name.startsWith("jackal")) clearHaze(g, canvas.width, canvas.height);
   if (other) {
     for (const [x, y, w, h] of regions) {
       const left = pad + Math.round(x * base.naturalWidth), top = pad + Math.round(y * base.naturalHeight);
@@ -124,8 +131,9 @@ async function composite(spec: (typeof STORY)[StoryKind], pose: number, a: Athle
       g.clearRect(left, top, width, height);
       g.drawImage(other, x * other.naturalWidth, y * other.naturalHeight, w * other.naturalWidth, h * other.naturalHeight, left, top, width, height);
     }
+    if (name.startsWith("jackal")) clearHaze(g, canvas.width, canvas.height);
   }
-  if (decorated) drawStoryHair(g, base.naturalWidth, base.naturalHeight, pad, heads, [a.hair, b?.hair ?? a.hair], name, injury);
+  if (decorated) drawStoryHair(g, base.naturalWidth, base.naturalHeight, pad, heads, [a.hair, b?.hair ?? a.hair], [first, second], name);
   const bounds = opaqueBounds(g, canvas.width, canvas.height);
   return bounds ? { canvas, bounds } : null;
 }
@@ -167,11 +175,11 @@ function afroBehindHead(g: CanvasRenderingContext2D, width: number, height: numb
   g.restore();
 }
 
-function drawStoryHair(g: CanvasRenderingContext2D, width: number, height: number, pad: number, heads: readonly HeadMark[], hair: readonly number[], artwork: string, allowOriginalStyles = false): void {
+function drawStoryHair(g: CanvasRenderingContext2D, width: number, height: number, pad: number, heads: readonly HeadMark[], hair: readonly number[], picks: readonly { file: number; overlay: boolean }[], artwork: string): void {
   for (const [cx, cy, size, facing, slot] of heads) {
-    if (slot < 0 || !allowOriginalStyles && (hair[slot] ?? 0) < 5) continue;
+    if (slot < 0 || !picks[slot]?.overlay) continue;
     const choice = hair[slot];
-    const baseChoice = ART_HAIR[choice] ?? 0;
+    const baseChoice = picks[slot].file;
     const scale = size * width / 48;
     if (artwork === "grounding0" && choice === 5) {
       afroBehindHead(g, width, height, pad, cx, cy, scale);
@@ -205,7 +213,7 @@ function drawStoryHair(g: CanvasRenderingContext2D, width: number, height: numbe
     g.scale(scale * facing, scale);
     g.lineJoin = "round";
     g.lineCap = "round";
-    const jackal = artwork === "jackal";
+    const jackal = artwork.startsWith("jackal");
     if (choice === 5 && !jackal) g.translate(9, -2);
     const silhouetteScale = choice === 5 ? (jackal ? 0.55 : 0.95) : choice === 7 || choice === 8 ? 1.1 : choice === 9 ? (jackal ? 0.52 : 0.95) : 1;
     g.scale(silhouetteScale, silhouetteScale);
@@ -225,7 +233,7 @@ function drawStoryHair(g: CanvasRenderingContext2D, width: number, height: numbe
 async function storyPainter(kind: StoryKind, req: CutawayRequest): Promise<Painter> {
   const spec = STORY[kind];
   const pose = req.pose ?? 0;
-  const art = await composite(spec, pose, req.a, req.b);
+  const art = await composite(kind, spec, pose, req.a, req.b);
   const { contact, end } = TIMING;
   return (ctx, time) => {
     const u = ease(clamp((time - contact) / (end - contact)));
@@ -533,7 +541,7 @@ async function injuryPlaceholder(req: CutawayRequest): Promise<Painter> {
     ctx.fillText(req.note ?? "", W / 2, 265);
     ctx.fillStyle = "#9db3a2";
     ctx.font = "italic 18px sans-serif";
-    ctx.fillText("Placeholder: injury cutaway art still to be drawn", W / 2, 320);
+    ctx.fillText("Men's injury artwork not yet available", W / 2, 320);
     ctx.textAlign = "start";
   };
 }
