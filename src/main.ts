@@ -90,7 +90,8 @@ const app = document.getElementById("app") as HTMLElement;
 const scoutDialog = h("dialog", { class: "scout" });
 const rulesDialog = h("dialog", { class: "rules" });
 const creditsDialog = h("dialog", { class: "credits" });
-document.body.append(scoutDialog, rulesDialog, creditsDialog);
+const eraDialog = h("dialog", { class: "credits era" });
+document.body.append(scoutDialog, rulesDialog, creditsDialog, eraDialog);
 
 const ATTR_INFO: Record<(typeof ATTRS)[number], [string, string]> = {
   power: ["Power", "Strength. Breaks tackles and drives through defenders. Matters most for Anchors and Bruisers."],
@@ -456,6 +457,25 @@ const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter(
 let compareId: string | null = null;
 let cmpMode: "player" | "squad" = "player";
 
+/** Tells the manager, once, that the intake has marked a prospect to follow, so they can decide whether to sign. */
+function announceFollowed(s: SeasonState) {
+  const e = s.eraProspects?.find((x) => x.status === "intake" && x.introducedSeason === s.season && !x.announced);
+  const p = e && s.intake?.prospects.find((x) => x.id === e.id);
+  if (!e || !p) return;
+  e.announced = true;
+  void persist(s);
+  const close = h("button", { class: "primary" }, "See the youth shortlist");
+  close.onclick = () => eraDialog.close();
+  eraDialog.replaceChildren(
+    h("h2", {}, "Followed player"),
+    h("p", {}, h("span", { class: "card-chip y" }, "FOLLOWED"), ` ${p.name}`),
+    h("p", {}, `A ${p.role} aged ${p.age} has joined your youth shortlist.`),
+    h("p", { class: "dim" }, "Dominion will follow this career wherever it goes. Their potential is not special: they may play for years or never get a contract. Sign them in the youth shortlist if you want them."),
+    close,
+  );
+  queueMicrotask(() => { if (!eraDialog.open) eraDialog.showModal(); });
+}
+
 /**
  * The offseason screen. Recommendations first, the three lists under them, and a compare panel that stays in
  * view: click any name, here or in the scouts' notes, to put that player beside someone in your squad.
@@ -470,6 +490,7 @@ function offseasonView(s: SeasonState): HTMLElement {
     compareId = null;
   }
   const team = teamById(s, s.managedId);
+  announceFollowed(s);
   const check = checkPlan(s, plan);
   const retiring = new Set(intake.retiring);
   const advice = adviseRecruitment(check.roster, intake, plan, check.moneyAfter);
@@ -540,7 +561,7 @@ function offseasonView(s: SeasonState): HTMLElement {
   for (const p of intake.prospects) {
     yb.append(
       h("tr", { class: `${plan.sign.includes(p.id) ? "sel" : ""} ${p.id === focus?.id ? "insp" : ""}` },
-        nameCell(p, vacated.has(p.role) ? h("span", { class: "oop", title: "Fills a retirement" }, " ●") : p.genius ? h("span", { class: "card-chip y", title: "Found by your youth academy: a once-in-a-generation talent" }, "GENIUS") : eraChip(p)),
+        nameCell(p, vacated.has(p.role) ? h("span", { class: "oop", title: "Fills a retirement" }, " ●") : null, p.genius ? h("span", { class: "card-chip y", title: "Found by your youth academy: a once-in-a-generation talent" }, "GENIUS") : null, eraChip(p)),
         h("td", {}, p.role), h("td", {}, String(p.age)), h("td", { class: "stars" }, stars(p.scouted ?? 0)), ...attrCells(p),
         h("td", { class: "pts" }, String(overall(p))), h("td", {}, fmtMoney(teenSalePrice(p))),
         h("td", {}, actionFor(p))),

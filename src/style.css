@@ -505,3 +505,5 @@ tr.insp { box-shadow: inset 3px 0 0 var(--acc); background: rgba(143, 227, 166, 
 /* A link that jumps to another tab, used in news and summary cards. */
 .golink { color: inherit; text-decoration: underline; text-underline-offset: 2px; opacity: 0.85; cursor: pointer; }
 .golink:hover { opacity: 1; }
+dialog.era { max-width: 440px; text-align: left; }
+dialog.era p { margin: 8px 0; }

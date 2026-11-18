@@ -34,6 +34,8 @@ export interface EraProspect {
   windowLeft?: number;
   /** One line per season spent on a roster. */
   seasons: { season: number; clubId: string; apps: number; points?: number }[];
+  /** Set once the manager has been shown the "followed player joined the shortlist" popup. */
+  announced?: boolean;
   /** The retirement entry, kept for the profile. */
   summary?: string;
   /** Sparse permanent facts. Text is built from these when shown. */
