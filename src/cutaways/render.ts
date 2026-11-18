@@ -281,12 +281,17 @@ async function storyPainter(kind: StoryKind, req: CutawayRequest): Promise<Paint
 /** The original big hit: one running sprite, mirrored for the tackler, with the hairstyle drawn on top. */
 async function bigHitPainter(req: CutawayRequest): Promise<Painter> {
   const sprite = await load("sprite");
+  // The sprite's head touches its top edge, so taller hairstyles (hijab, bob, afro, locs, ponytail) were
+  // sliced flat. Give each variant headroom above the sprite and draw it back at the same scale.
+  const headroom = Math.ceil((sprite.height * 16) / 260);
+  const extra = headroom / sprite.height;
   const variant = (hair: number) => {
     const part = HAIR_PARTS[hair];
-    const [canvas, g] = newCanvas(sprite.width, sprite.height);
-    g.drawImage(sprite, 0, 0);
+    const [canvas, g] = newCanvas(sprite.width, sprite.height + headroom);
+    g.drawImage(sprite, 0, headroom);
     if (part) {
-      g.scale(canvas.width / 152, canvas.height / 260);
+      g.translate(0, headroom);
+      g.scale(sprite.width / 152, sprite.height / 260);
       g.globalCompositeOperation = "destination-out";
       g.fill(new Path2D(HEAD_CLEAR));
       g.globalCompositeOperation = "source-over";
@@ -318,7 +323,7 @@ async function bigHitPainter(req: CutawayRequest): Promise<Painter> {
     ctx.translate(x, y);
     ctx.scale(side, 1);
     ctx.rotate(lean);
-    ctx.drawImage(image, -width * 0.5, -height * 0.69, width, height);
+    ctx.drawImage(image, -width * 0.5, -height * (0.69 + extra), width, height * (1 + extra));
     if (goggles) {
       const gy = -height * 0.615;
       ctx.lineCap = "round";
