@@ -19,10 +19,19 @@ export const VISIBLE_HAIR = [0, 1, 2, 3, 5, 6, 7, 8, 9, 10] as const;
 /** Build name and the horizontal scale it applies to the portrait. */
 export const BUILDS: readonly (readonly [string, number])[] = [["Lean", 0.97], ["Balanced", 1], ["Broad", 1.035]];
 
+/** The tapered natural crop turns up too often at one in ten, so it is drawn at a fifth of the weight of the others. */
+const HAIR_WEIGHT = (i: number) => (i === 7 ? 0.2 : 1);
+function pickHair(key: string): number {
+  const total = VISIBLE_HAIR.reduce((t, i) => t + HAIR_WEIGHT(i), 0);
+  let r = (hashSeed(key, "hair") % 10000) / 10000 * total;
+  for (const i of VISIBLE_HAIR) if ((r -= HAIR_WEIGHT(i)) < 0) return i;
+  return VISIBLE_HAIR[0];
+}
+
 /** A new player's look: a random hairstyle, face and build. Face tweaks (eyes, nose, lips, jaw) start at the original. */
 export function makeLook(key: string): Look {
   return {
-    portrait: VISIBLE_HAIR[hashSeed(key, "hair") % VISIBLE_HAIR.length],
+    portrait: pickHair(key),
     build: hashSeed(key, "build") % BUILDS.length,
     face: hashSeed(key, "face") % 2,
     goggles: false,

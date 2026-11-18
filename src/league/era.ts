@@ -43,7 +43,9 @@ export interface EraProspect {
 /** Chance each offseason that the intake marks a prospect. */
 export const ERA_CHANCE = 0.22;
 /** Seasons without one after which the next offseason always marks one. */
-export const ERA_PITY_SEASONS = 6;
+export const ERA_PITY_SEASONS = 3;
+/** A new game guarantees its first era prospect by this season's intake. */
+export const ERA_FIRST_BY = 2;
 /** Most era prospects being followed at once. */
 export const ERA_MAX_LIVE = 3;
 /** Offseasons in which an unsigned prospect may still be taken by an AI club. */
@@ -58,7 +60,7 @@ export const isLive = (r: EraProspect) => r.status === "intake" || r.status === 
 /** Whether this offseason's intake marks a prospect. Deterministic from the save seed, so reloading cannot reroll it. */
 export function eraDue(seed: number, season: number, lastEraSeason: number | undefined, live: number): boolean {
   if (live >= ERA_MAX_LIVE) return false;
-  if (season - (lastEraSeason ?? 0) >= ERA_PITY_SEASONS) return true;
+  if (lastEraSeason === undefined ? season >= ERA_FIRST_BY : season - lastEraSeason >= ERA_PITY_SEASONS) return true;
   return new Rng(hashSeed(seed, season, "era")).chance(ERA_CHANCE);
 }
 

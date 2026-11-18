@@ -102,7 +102,8 @@ describe("extra squad places", () => {
     const wages = (roster: typeof full.roster) => roster.reduce((t, p) => t + wageOf(p), 0);
     const without = full.roster.slice().sort((a, b) => overall(b) - overall(a)).slice(0, SQUAD_SIZE);
     expect(full.size).toBe(SQUAD_SIZE + 1);
-    expect(wages(full.roster)).toBeGreaterThan(wages(without));
+    // The eleventh player can be a youngster whose wage rounds to nothing, so never less, not always more.
+    expect(wages(full.roster)).toBeGreaterThanOrEqual(wages(without));
   }, 60000);
 
   it("stay with the club when you move: the new club has ten and the old club drops back to ten", () => {
