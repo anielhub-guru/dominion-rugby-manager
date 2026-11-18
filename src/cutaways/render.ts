@@ -106,12 +106,13 @@ function clearHaze(g: CanvasRenderingContext2D, width: number, height: number): 
 /** A pose with the second player's head and shoulders swapped in when her hairstyle differs. */
 async function composite(kind: StoryKind, spec: (typeof STORY)[StoryKind], pose: number, a: Athlete, b?: Athlete): Promise<{ canvas: HTMLCanvasElement; bounds: Bounds } | null> {
   const name = spec.art(pose);
-  // A hairstyle drawn into this pose is used as is. Otherwise the nearest older art is used and the vector hair goes on top.
+  // A hairstyle drawn into this pose is used as is. Otherwise the nearest older art is used (with vector hair on top only for styles 1-4).
   const pick = (hair: number): { file: number; overlay: boolean } => {
     if (urlOf(`${name}-${hair}`)) return { file: hair, overlay: false };
     const mapped = ART_HAIR[hair] ?? 0;
     const file = urlOf(`${name}-${mapped}`) ? mapped : 0;
-    return { file, overlay: hair > 0 && (hair >= 5 || file !== mapped) };
+    // Vector hair painted over older art looks badly layered for the newer styles (5+), so those fall back to the nearest drawn style.
+    return { file, overlay: hair > 0 && hair < 5 && file !== mapped };
   };
   const first = pick(a.hair);
   const second = b ? pick(b.hair) : first;
