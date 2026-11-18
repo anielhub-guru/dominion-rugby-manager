@@ -22,7 +22,7 @@ export const BUILDS: readonly (readonly [string, number])[] = [["Lean", 0.97], [
 /** The tapered natural crop turns up too often at one in ten, so it is drawn at a fifth of the weight of the others. */
 const HAIR_WEIGHT = (i: number) => (i === 7 ? 0.2 : 1);
 function pickHair(key: string): number {
-  const total = VISIBLE_HAIR.reduce((t, i) => t + HAIR_WEIGHT(i), 0);
+  const total = VISIBLE_HAIR.reduce<number>((t, i) => t + HAIR_WEIGHT(i), 0);
   let r = (hashSeed(key, "hair") % 10000) / 10000 * total;
   for (const i of VISIBLE_HAIR) if ((r -= HAIR_WEIGHT(i)) < 0) return i;
   return VISIBLE_HAIR[0];
