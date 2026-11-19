@@ -72,9 +72,48 @@ export interface FoeTally {
   said?: Partial<Record<"duel" | "nemesis" | "clash", number>>;
 }
 
+/** A player they shared a roster with. */
+export interface PastMate {
+  name: string;
+  /** The club the mate was last seen at with them. */
+  clubId: string;
+  /** Seasons shared. */
+  seasons: number;
+  last: number;
+  /** Set once they have faced this player as an opponent. */
+  met?: boolean;
+}
+
+/** First meetings with a former teammate this season, waiting for the season to close. */
+export interface Reunion {
+  id: string;
+  name: string;
+  /** The club the old teammate played for in that match. */
+  clubId: string;
+  score: string;
+  tries: number;
+  theirTries: number;
+  shared: number;
+}
+
 export interface VsRecord {
   clubs: Record<string, ClubTally>;
   foes: Record<string, FoeTally>;
+  /** Everyone they have shared a roster with. Missing on older saves. */
+  past?: Record<string, PastMate>;
+  pending?: Reunion[];
+}
+
+/** Notes who is on the followed player's roster, at the end of a season. */
+export function rememberMates(vs: VsRecord | undefined, playerId: string, mates: { id: string; name: string }[], clubId: string, season: number): VsRecord {
+  const rec: VsRecord = vs ?? { clubs: {}, foes: {} };
+  const past = (rec.past ??= {});
+  for (const m of mates) {
+    if (m.id === playerId) continue;
+    const was = past[m.id];
+    past[m.id] = { name: m.name, clubId, seasons: (was?.seasons ?? 0) + (was?.last === season ? 0 : 1), last: season, ...(was?.met ? { met: true } : {}) };
+  }
+  return rec;
 }
 
 /** Largest final margin for a match to count as decided by one moment: a try and a conversion, plus a point of slack. */
@@ -224,6 +263,12 @@ export function recordVs(vs: VsRecord | undefined, playerId: string, clubId: str
     const carded = line.yellows + line.reds > 0;
     for (const o of log.players ?? []) {
       if (o.team === side) continue;
+      // The first time they face someone they once shared a roster with.
+      const old = rec.past?.[o.id];
+      if (old && !old.met && old.last < season) {
+        old.met = true;
+        (rec.pending ??= []).push({ id: o.id, name: o.name, clubId: vsId, score: `${mine}-${theirs}`, tries: line.tries, theirTries: o.tries, shared: old.seasons });
+      }
       const scored = o.tries > 0;
       const oCarded = o.yellows + o.reds > 0;
       if (!scored && !(carded && oCarded)) continue;
@@ -277,6 +322,9 @@ export function vsCandidates(vs: VsRecord | undefined, season: number, clubId: s
       out.push({ entry: { season, key: keys[k], clubId, vsId: id, value: n }, strength: n / VS_MIN[k], commit: () => void (said[k] = n) });
     }
   }
+  // The old teammate they shared most seasons with, if one was met for the first time this season.
+  const reunion = [...(vs.pending ?? [])].sort((a, b) => b.shared - a.shared)[0];
+  if (reunion) out.push({ entry: { season, key: "reunion", clubId, vsId: reunion.clubId, otherId: reunion.id, otherName: reunion.name, score: reunion.score, value: reunion.shared, detail: `${reunion.tries}-${reunion.theirTries}` }, strength: 2 });
   for (const [id, f] of Object.entries(vs.foes)) {
     const said = (f.said ??= {});
     const counts = { duel: f.both, nemesis: f.foeOnly, clash: f.clash } as const;
@@ -300,7 +348,7 @@ export const MAX_SEASON_EXTRAS = 3;
 export function closeLedger(l: Ledger | undefined, existing: ChronicleEntry[], extras: Candidate[] = [], origin?: { signed: boolean }): ChronicleEntry[] {
   const out: ChronicleEntry[] = [];
   if (l?.meeting) out.push({ season: l.season, key: "first-meeting", clubId: l.clubId, vsId: l.meeting.vsId, score: l.meeting.score, value: l.meeting.tries, detail: origin?.signed ? "left" : "passed" });
-  const room = MAX_STORY_LINES - existing.filter((c) => STORY_KEYS.has(c.key)).length;
+  const room = MAX_STORY_LINES - existing.filter((c) => STORY_KEYS.has(c.key) && !STRUCTURAL_KEYS.has(c.key)).length;
   if (room <= 0 || (!l && !extras.length)) return out;
   const picked: ChronicleEntry[] = [];
   const best = l?.moments[0];
@@ -328,4 +376,7 @@ export function closeLedger(l: Ledger | undefined, existing: ChronicleEntry[], e
   return out;
 }
 
-export const STORY_KEYS = new Set<string>(["winning-try", "winning-kick", "stand", "supplier", "finisher", "alternating", "together", "replaced", "first-meeting", "scoring-run", "drought", "unbeaten", "losing", "duel", "nemesis", "clash", "top-scorer", "runner-up-scorer"]);
+/** Lines that mark a fixed point in a career. They always count and never use up a season's places. */
+export const STRUCTURAL_KEYS = new Set<string>(["replaced", "first-meeting", "return"]);
+
+export const STORY_KEYS = new Set<string>(["reunion", "return", "winning-try", "winning-kick", "stand", "supplier", "finisher", "alternating", "together", "replaced", "first-meeting", "scoring-run", "drought", "unbeaten", "losing", "duel", "nemesis", "clash", "top-scorer", "runner-up-scorer"]);

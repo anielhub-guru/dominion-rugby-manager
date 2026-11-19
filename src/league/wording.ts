@@ -248,9 +248,42 @@ const RUNNER: VsLine[] = [
   (w, l) => `Ran ${w.other} (${w.vs}) close for the scoring title, ${w.n} points short. ${cap(l)}`,
 ];
 
+const seasonsOf = (n: number) => `${n} ${n === 1 ? "season" : "seasons"}`;
+
+const RETURN: Record<string, ((w: Words) => string)[]> = {
+  left: [
+    (w) => `Returned to ${w.club}, the club they left, after ${seasonsOf(w.n ?? 0)} away`,
+    (w) => `Back at ${w.club}, where they once played, ${seasonsOf(w.n ?? 0)} on`,
+    (w) => `Rejoined ${w.club} after ${seasonsOf(w.n ?? 0)} elsewhere`,
+  ],
+  passed: [
+    (w) => `Joined ${w.club}, whose intake first marked them, ${seasonsOf(w.n ?? 0)} after the intake let them go`,
+    (w) => `Found a place at ${w.club}, the club that first introduced them, ${seasonsOf(w.n ?? 0)} on`,
+    (w) => `${w.club}, who first brought them into the intake, signed them ${seasonsOf(w.n ?? 0)} later`,
+  ],
+};
+
+/** `detail` is the followed player's tries then the old teammate's, "1-0". */
+const REUNION_INTRO: ((w: Words) => string)[] = [
+  (w) => `Faced former teammate ${w.other} (${w.vs}) for the first time, after ${seasonsOf(w.n ?? 0)} together`,
+  (w) => `Met old teammate ${w.other}, now at ${w.vs}, across the field for the first time`,
+  (w) => `First match against ${w.other} of ${w.vs}, a teammate for ${seasonsOf(w.n ?? 0)}`,
+  (w) => `Lined up against ${w.other} (${w.vs}), with whom they shared ${seasonsOf(w.n ?? 0)}, for the first time`,
+];
+const REUNION_OUTCOME: Record<string, ((w: Words) => string)[]> = {
+  both: [(w) => `. Both scored; ${w.score}`, (w) => `: a try each in a ${w.score} match`],
+  mine: [(w) => `. They scored, ${w.other} did not; ${w.score}`, (w) => `: a try for them and none for ${w.other}, ${w.score}`],
+  theirs: [(w) => `. ${w.other} scored, they did not; ${w.score}`, (w) => `: a try for ${w.other} and none for them, ${w.score}`],
+  none: [(w) => `. Neither scored; ${w.score}`, (w) => `: no try for either, ${w.score}`],
+};
+const reunionKey = (detail = "0-0") => {
+  const [a, b] = detail.split("-").map(Number);
+  return a > 0 && b > 0 ? "both" : a > 0 ? "mine" : b > 0 ? "theirs" : "none";
+};
+
 export type WordKey =
   | "winning-try" | "winning-kick" | "stand" | PairKey | "replaced"
-  | "first-meeting" | "scoring-run" | "drought" | "unbeaten" | "losing" | "duel" | "nemesis" | "clash" | "top-scorer" | "runner-up-scorer";
+  | "first-meeting" | "reunion" | "return" | "scoring-run" | "drought" | "unbeaten" | "losing" | "duel" | "nemesis" | "clash" | "top-scorer" | "runner-up-scorer";
 
 /** The line for one story entry. The seed parts keep the choice stable for that entry. */
 export function storyText(key: WordKey, w: Words, ...seed: (string | number)[]): string {
@@ -268,6 +301,8 @@ export function storyText(key: WordKey, w: Words, ...seed: (string | number)[]):
       const intro = pick(FIRST_INTRO[w.detail === "left" ? "left" : "passed"], key, "intro", ...seed)(w);
       return intro + pick(FIRST_OUTCOME[resultOf(w.score, w.n)], key, "outcome", ...seed)(w);
     }
+    case "return": return pick(RETURN[w.detail === "left" ? "left" : "passed"], key, ...seed)(w);
+    case "reunion": return pick(REUNION_INTRO, key, "intro", ...seed)(w) + pick(REUNION_OUTCOME[reunionKey(w.detail)], key, "outcome", ...seed)(w);
     case "scoring-run": return pick(RUN, key, ...seed)(w, label("run", w.n ?? 0, VS_MIN.run, ...seed));
     case "drought": return pick(DRY, key, ...seed)(w, label("dry", w.n ?? 0, VS_MIN.dry, ...seed));
     case "unbeaten": return pick(UNBEATEN, key, ...seed)(w, label("unbeaten", w.n ?? 0, VS_MIN.unbeaten, ...seed));
@@ -281,7 +316,8 @@ export function storyText(key: WordKey, w: Words, ...seed: (string | number)[]):
 }
 
 /** Short phrase for the "Alongside" list, said of the other player. */
-export const SHORT: Record<PairKey | "replaced" | "duel" | "nemesis" | "clash" | "top-scorer" | "runner-up-scorer", string> = {
+export const SHORT: Record<PairKey | "replaced" | "duel" | "nemesis" | "clash" | "top-scorer" | "runner-up-scorer" | "reunion", string> = {
+  reunion: "former teammate, met as an opponent",
   duel: "scored against each other",
   nemesis: "scored when they could not",
   clash: "cards for both",

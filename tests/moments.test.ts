@@ -3,8 +3,8 @@ import { simulateMatch } from "../src/engine/match";
 import { hashSeed } from "../src/engine/rng";
 import type { MatchEvent, MatchLog } from "../src/engine/types";
 import { generateTeams } from "../src/league/teams";
-import { MAX_STORY_LINES, STORY_KEYS, closeLedger, decidingScore, longestTurns, momentsIn, pruneVs, recordMatches, recordVs, vsCandidates, type Ledger } from "../src/league/moments";
-import { alongside, chronicleLines, newEraProspect, raceCandidate } from "../src/league/era";
+import { MAX_STORY_LINES, STORY_KEYS, STRUCTURAL_KEYS, closeLedger, rememberMates, decidingScore, longestTurns, momentsIn, pruneVs, recordMatches, recordVs, vsCandidates, type Ledger } from "../src/league/moments";
+import { alongside, chronicleLines, closeEraLedger, newEraProspect, raceCandidate, recordEraSeason } from "../src/league/era";
 import { storyText } from "../src/league/wording";
 import { autoPlan, completeOffseason, isSeasonOver, newGame, playMatchday, startNextSeason, teamById, type OffseasonPlan, type SeasonState } from "../src/league/season";
 import { overall } from "../src/league/teams";
@@ -156,6 +156,55 @@ describe("against other clubs and players", () => {
   });
 });
 
+describe("old teammates and returns", () => {
+  it("notes the first meeting with a former teammate, once, and tells it for the longest-shared one", () => {
+    let vs = rememberMates(undefined, "f", [{ id: "f", name: "F" }, { id: "t1", name: "Ada Idowu" }, { id: "t2", name: "Bee" }], "O", 2);
+    vs = rememberMates(vs, "f", [{ id: "f", name: "F" }, { id: "t1", name: "Ada Idowu" }], "O", 3);
+    expect(vs.past!.t1).toMatchObject({ seasons: 2, last: 3 });
+    expect(vs.past!.t2).toMatchObject({ seasons: 1 });
+    // Season 4: f is now at X and meets both old mates, now at O, in one match each.
+    vs = recordVs(vs, "f", "X", 4, [meet("X", "O", 14, 10, [line("f", 0, 1), line("t1", 1, 1), line("t2", 1, 0)])]);
+    expect(vs.pending!.map((p) => p.id).sort()).toEqual(["t1", "t2"]);
+    vs = recordVs(vs, "f", "X", 4, [meet("X", "O", 14, 10, [line("f", 0, 1), line("t1", 1, 1)])]);
+    expect(vs.pending!.length).toBe(2); // met once only
+    const c = vsCandidates(vs, 4, "X").filter((x) => x.entry.key === "reunion");
+    expect(c.length).toBe(1);
+    expect(c[0].entry).toMatchObject({ otherId: "t1", otherName: "T1", vsId: "O", value: 2, detail: "1-1", score: "14-10" });
+    // A mate of the same season is not "former".
+    const same = rememberMates(undefined, "f", [{ id: "t1", name: "Ada" }], "X", 4);
+    expect(recordVs(same, "f", "X", 4, [meet("X", "O", 1, 0, [line("f", 0, 0), line("t1", 1, 0)])]).pending ?? []).toEqual([]);
+    const r = { ...newEraProspect({ id: "f", name: "F", role: "Winger", age: 17 } as never, "O", 2), status: "playing" as const, vs };
+    closeEraLedger(r, 4, "X");
+    expect(r.chronicle.some((x) => x.key === "reunion")).toBe(true);
+    expect(r.vs!.pending).toEqual([]);
+    const text = chronicleLines(r, (id) => `Club ${id}`).join(" ");
+    expect(text).toContain("T1");
+    expect(alongside(r, (id) => `Club ${id}`)[0]).toMatchObject({ name: "T1", club: "Club O" });
+  });
+
+  it("records a return to the origin club, whether they were once there or not", () => {
+    const fresh = () => ({ ...newEraProspect({ id: "f", name: "F", role: "Winger", age: 17 } as never, "O", 2), status: "playing" as const });
+    const was = fresh();
+    recordEraSeason(was, 2, "O", 3, 14, "Origin");
+    recordEraSeason(was, 3, "X", 3, 14, "Xtown");
+    recordEraSeason(was, 4, "X", 3, 14, "Xtown");
+    recordEraSeason(was, 5, "O", 3, 14, "Origin");
+    const back = was.chronicle.find((c) => c.key === "return")!;
+    expect(back).toMatchObject({ season: 5, clubId: "O", value: 2, detail: "left" });
+    expect(chronicleLines(was, (id) => `Club ${id}`).join(" ")).toMatch(/Club O/);
+    const never = fresh();
+    recordEraSeason(never, 3, "X", 3, 14, "Xtown");
+    recordEraSeason(never, 4, "O", 3, 14, "Origin");
+    expect(never.chronicle.find((c) => c.key === "return")).toMatchObject({ season: 4, detail: "passed", value: 1 });
+    // Never leaving does not count.
+    const stay = fresh();
+    recordEraSeason(stay, 2, "O", 3, 14, "Origin");
+    recordEraSeason(stay, 3, "O", 3, 14, "Origin");
+    expect(stay.chronicle.some((c) => c.key === "return")).toBe(false);
+    expect(STRUCTURAL_KEYS.has("return")).toBe(true);
+  });
+});
+
 describe("wording", () => {
   const w = { name: "Hauwa Salisu", club: "Kano Ironclads", other: "Ada Idowu", vs: "Abuja Wardens", score: "24-21", minute: 39, n: 5, role: "Winger", age: 33 };
   it("is stable for an entry, varies between entries, and always carries the facts", () => {
@@ -176,6 +225,12 @@ describe("wording", () => {
       const t = storyText(k, w, "id", 2);
       expect(t).toContain("Ada Idowu");
       expect(t).toContain("Abuja Wardens");
+    }
+    for (const detail of ["passed", "left"]) expect(storyText("return", { ...w, detail, n: 2 }, "id", 3)).toContain("Kano Ironclads");
+    for (const detail of ["1-1", "1-0", "0-1", "0-0"]) {
+      const t = storyText("reunion", { ...w, detail }, "id", 3);
+      expect(t).toContain("Ada Idowu");
+      expect(t).toContain("24-21");
     }
     for (const detail of ["passed", "left"]) for (const score of ["24-21", "10-10", "3-9"]) for (const n of [0, 2]) expect(storyText("first-meeting", { ...w, detail, score, n }, "id", 5)).toContain(score);
     const all = [3, 5, 8].flatMap((n) => Array.from({ length: 60 }, (_, i) => ["clash", "duel", "nemesis"].map((k) => storyText(k as never, { ...w, n }, "id", i)).join(" "))).join(" ");
@@ -219,7 +274,7 @@ describe("over a long game", () => {
     let seasons = 0, story = 0;
     for (const e of s.eraProspects ?? []) {
       seasons += e.seasons.length;
-      const lines = e.chronicle.filter((c) => STORY_KEYS.has(c.key) && c.key !== "replaced" && c.key !== "first-meeting").length;
+      const lines = e.chronicle.filter((c) => STORY_KEYS.has(c.key) && !STRUCTURAL_KEYS.has(c.key)).length;
       story += lines;
       expect(lines).toBeLessThanOrEqual(MAX_STORY_LINES);
     }

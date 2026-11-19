@@ -11,8 +11,8 @@ import { BONUS_FLAVOUR, MATCH_PAY, earnsSquadSlot, MAX_BUYS, MONEY_START, fmtMon
 import { DEFAULT_START_YEAR } from "./calendar";
 import { MAX_SPONSOR_DEALS, SPONSOR_LAPSE_MATCHDAY, describeCondition, fanOffer, judgeFanDeal, judgeSeasonDeal, sponsorOffers, type Deal } from "./deals";
 import { FACILITIES, FACILITY_IDS, MAX_FACILITY_LEVEL, OFFER_FORMS, PROPOSAL_CHANCE, PROPOSAL_LAPSE_MATCHDAY, SPONSORS, academyBonus, geniusChance, levelOf, projectDuration, recoveryBonus, reducedInjury, trainingSlots, upgradeCost, type FacilityId, type FacilityLevels } from "./facilities";
-import { recordMatches, recordVs } from "./moments";
-import { ERA_WINDOW, closeEraLedger, eraDue, raceCandidate, isLive, joinedElsewhereNews, introNews, makeEraProspect, newEraProspect, noContractNews, recordEraSeason, retirementNews, returns, type EraProspect } from "./era";
+import { recordMatches, recordVs, rememberMates } from "./moments";
+import { ERA_WINDOW, closeEraLedger, eraDue, returnEntry, raceCandidate, isLive, joinedElsewhereNews, introNews, makeEraProspect, newEraProspect, noContractNews, recordEraSeason, retirementNews, returns, type EraProspect } from "./era";
 import { RESERVE_COUNT, makeGenius, evolvePlayers, playShare, generateTeams, makeReserves, initialPotential, makeProspects, objectiveTarget, overall, teamRating } from "./teams";
 
 export { describeLine, impact };
@@ -809,6 +809,7 @@ export function startNextSeason(prev: SeasonState): SeasonState {
       const position = table.findIndex((r) => r.teamId === club.id) + 1;
       news.push(...recordEraSeason(e, lastSeason, club.id, played[e.id]?.apps ?? 0, matches, club.name, played[e.id]?.points ?? 0, { position, age: p.age, overall: overall(p) }));
       const scoring = state.teams.flatMap((t) => t.players.map((x) => ({ id: x.id, name: x.name, clubId: t.id, points: played[x.id]?.points ?? 0 })));
+      e.vs = rememberMates(e.vs, e.id, club.players, club.id, lastSeason);
       closeEraLedger(e, lastSeason, club.id, raceCandidate(e, lastSeason, club.id, scoring));
     }
   }
@@ -878,6 +879,7 @@ export function startNextSeason(prev: SeasonState): SeasonState {
         delete waiting.windowLeft;
         waiting.status = "playing";
         waiting.chronicle.push({ season, key: "joined", clubId: team.id });
+        if (team.id === waiting.originClubId) waiting.chronicle.push(returnEntry(waiting, season, team.id));
         waiting.chronicle.push({ season, key: "replaced", clubId: team.id, otherId: r.id, otherName: r.name, value: r.age });
         news.push(joinedElsewhereNews(waiting.name, teamById(state, waiting.originClubId).name, waiting.introducedSeason, team.name));
         delete state.careerStats[r.id];

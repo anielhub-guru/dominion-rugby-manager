@@ -4,6 +4,12 @@ Versions follow `MAJOR.MINOR.PATCH`. The version lives in `package.json` and is 
 `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock` (a test fails if they
 drift apart). It is shown in the app footer and on the new-game screen.
 
+## Unreleased
+
+- Followed players: the first match against a former teammate now gets a chronicle line (with the seasons they shared
+  and who scored), and so does a return to the club whose intake introduced them, whether they were once on its
+  books or not. At most one reunion is told a season, for the teammate they shared most seasons with.
+
 ## 0.11.0
 
 - History tab: followed careers are now tabs, one per player. Live careers come first, newest first; players who have

@@ -184,4 +184,4 @@ teammate patterns for three places a season. A pattern already told is told agai
 meetings (`nextAt`). The first meeting with the origin club is always written, once. The scoring race (top or within
 12 points of the top) comes from `seasonStats` at season end. Narrative tropes covered: the revenge game, the
 hunting ground, the bogey side, the unbeaten run, the nemesis, the personal duel, the spirited fixture, the title
-race. Still open: a former teammate met as an opponent, and a return to the origin club.
+race. A former teammate met as an opponent (`vs.past`, `vs.pending`) and a return to the origin club (`returnEntry`) are also written.

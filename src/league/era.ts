@@ -129,6 +129,13 @@ export const noContractNews = (name: string) => `No contract offered. ${name} le
 export const joinedElsewhereNews = (name: string, originName: string, introducedSeason: number, clubName: string) =>
   `A first chance elsewhere. ${name}, not signed by ${originName} in the season ${introducedSeason} intake, joins ${clubName}.`;
 
+/** Coming back to the club whose intake introduced them. `value` is the seasons since they were last on its books, or since the intake. */
+export function returnEntry(r: EraProspect, season: number, clubId: string): ChronicleEntry {
+  const lastThere = [...r.seasons].reverse().find((x) => x.clubId === clubId && x.season < season)?.season;
+  const was = lastThere !== undefined || r.chronicle.some((c) => c.key === "joined" && c.clubId === clubId && c.season < season);
+  return { season, key: "return", clubId, value: Math.max(1, season - (lastThere ?? r.introducedSeason) - 1), detail: was ? "left" : "passed" };
+}
+
 /** The season just played, recorded for a player on a roster. Returns news lines and adds chronicle facts. */
 export function recordEraSeason(r: EraProspect, season: number, clubId: string, apps: number, matches: number, clubName: string, points = 0, extra: Pick<SeasonLine, "position" | "age" | "overall"> = {}): string[] {
   const earlier = r.seasons.filter((x) => x.season < season);
@@ -136,7 +143,10 @@ export function recordEraSeason(r: EraProspect, season: number, clubId: string, 
   if (extra.position === 1 && apps > 0) r.chronicle.push({ season, key: "title", clubId, value: apps });
   const before = earlier.reduce((t, x) => t + x.apps, 0);
   const prev = earlier[earlier.length - 1];
-  if (prev && prev.clubId !== clubId) r.chronicle.push({ season, key: "joined", clubId });
+  if (prev && prev.clubId !== clubId) {
+    r.chronicle.push({ season, key: "joined", clubId });
+    if (clubId === r.originClubId) r.chronicle.push(returnEntry(r, season, clubId));
+  }
   const regular = (n: number) => n >= Math.ceil(matches * REGULAR_SHARE);
   const news: string[] = [];
   const debut = apps > 0 && before === 0;
@@ -224,5 +234,6 @@ export function closeEraLedger(r: EraProspect, season: number, clubId: string, r
   const signed = r.chronicle.some((c) => c.key === "joined" && c.clubId === r.originClubId);
   r.chronicle.push(...closeLedger(r.ledger, r.chronicle, [...vsCandidates(r.vs, season, clubId), ...(race ? [race] : [])], { signed }));
   pruneVs(r.vs, season);
+  if (r.vs) r.vs.pending = [];
   delete r.ledger;
 }
