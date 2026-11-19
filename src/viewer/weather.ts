@@ -164,7 +164,7 @@ export class WeatherLayer {
     }
   }
 
-  /** A warm glow from the top corner with a few soft rays that slowly breathe. */
+  /** A warm glow from the top corner. */
   private sun() {
     const ctx = this.ctx!;
     const a = WEATHERS[this.weather.id].alpha;
@@ -174,18 +174,6 @@ export class WeatherLayer {
     glow.addColorStop(1, "rgba(255, 235, 170, 0)");
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, this.w, this.h);
-    const spread = this.weather.wind < 0 ? -1 : 1;
-    for (let i = 0; i < 4; i++) {
-      const pulse = 0.5 + 0.5 * Math.sin(this.t * 0.6 + i * 1.7);
-      const ang = 0.35 + i * 0.18;
-      ctx.fillStyle = `rgba(255, 240, 190, ${0.05 + 0.05 * pulse})`;
-      ctx.beginPath();
-      ctx.moveTo(x, -10);
-      ctx.lineTo(x + spread * Math.tan(ang) * this.h * 1.2, this.h);
-      ctx.lineTo(x + spread * Math.tan(ang + 0.07) * this.h * 1.2, this.h);
-      ctx.closePath();
-      ctx.fill();
-    }
   }
 
   /** An orange warmth over everything, with faint heat waves rising from the bottom. */
