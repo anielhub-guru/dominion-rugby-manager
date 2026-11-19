@@ -57,6 +57,7 @@ import { ATTR_NAMES, TACTIC_FOCUS, bestFive, buildRadar, playerProfile, profileO
 import { buildRules } from "./viewer/rules";
 import { buildTable } from "./viewer/table";
 import { championsCard, clubCard, followedCard } from "./viewer/history";
+import { showStory, storyOpen } from "./viewer/story";
 import { reviewSeason } from "./league/review";
 import { adviseRecruitment, type Part } from "./league/recruit";
 
@@ -90,8 +91,7 @@ const app = document.getElementById("app") as HTMLElement;
 const scoutDialog = h("dialog", { class: "scout" });
 const rulesDialog = h("dialog", { class: "rules" });
 const creditsDialog = h("dialog", { class: "credits" });
-const eraDialog = h("dialog", { class: "credits era" });
-document.body.append(scoutDialog, rulesDialog, creditsDialog, eraDialog);
+document.body.append(scoutDialog, rulesDialog, creditsDialog);
 
 const ATTR_INFO: Record<(typeof ATTRS)[number], [string, string]> = {
   power: ["Power", "Strength. Breaks tackles and drives through defenders. Matters most for Anchors and Bruisers."],
@@ -469,16 +469,13 @@ function announceFollowed(s: SeasonState) {
   if (!e || !p) return;
   e.announced = true;
   void persist(s);
-  const close = h("button", { class: "primary" }, "See the youth shortlist");
-  close.onclick = () => eraDialog.close();
-  eraDialog.replaceChildren(
-    h("h2", {}, "Followed player"),
-    h("p", {}, h("span", { class: "card-chip y" }, "FOLLOWED"), ` ${p.name}`),
-    h("p", {}, `A ${p.role} aged ${p.age} has joined your youth shortlist.`),
-    h("p", { class: "dim" }, "Dominion will follow this career wherever it goes. Their potential is not special: they may play for years or never get a contract. Sign them in the youth shortlist if you want them."),
-    close,
-  );
-  queueMicrotask(() => { if (!eraDialog.open) eraDialog.showModal(); });
+  showStory({
+    kicker: "FOLLOWED",
+    title: p.name,
+    lines: [`A ${p.role} aged ${p.age} has joined your youth shortlist.`],
+    note: "Dominion will follow this career wherever it goes. Their potential is not special: they may play for years or never get a contract. Sign them in the youth shortlist if you want them.",
+    button: "See the youth shortlist",
+  });
 }
 
 /**
@@ -659,7 +656,13 @@ function offseasonView(s: SeasonState): HTMLElement {
   comparePanel.classList.add("cmp");
 
   const confirm = h("button", { class: "primary", disabled: busy || !check.ok }, "Confirm and start the season");
-  confirm.onclick = () => void guarded(async () => void (await persist(completeOffseason(s, plan))));
+  confirm.onclick = () => void guarded(async () => {
+    const signed = (s.eraProspects ?? []).filter((e) => e.status === "intake" && plan.sign.includes(e.id)).map((e) => s.intake?.prospects.find((p) => p.id === e.id)).filter((p): p is Player => !!p);
+    await persist(completeOffseason(s, plan));
+    for (const p of signed) {
+      showStory({ kicker: "SIGNED", tone: "g", title: p.name, lines: [`${p.name}, a ${p.role} aged ${p.age}, has signed for ${teamById(s, s.managedId).name}.`], note: "Dominion keeps following this career. The History tab tells it season by season.", button: "Start the season" });
+    }
+  });
   const reset = h("button", {}, "Reset to default");
   reset.onclick = () => {
     plan = autoPlan(s);
@@ -1357,7 +1360,7 @@ document.addEventListener("keydown", (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const target = e.target as HTMLElement;
   if (["SELECT", "INPUT", "BUTTON"].includes(target.tagName)) return;
-  if (scoutDialog.open || rulesDialog.open || creditsDialog.open) return;
+  if (scoutDialog.open || rulesDialog.open || creditsDialog.open || storyOpen()) return;
   if (live) {
     if (e.key === " ") {
       e.preventDefault();

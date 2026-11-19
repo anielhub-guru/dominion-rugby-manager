@@ -505,5 +505,8 @@ tr.insp { box-shadow: inset 3px 0 0 var(--acc); background: rgba(143, 227, 166, 
 /* A link that jumps to another tab, used in news and summary cards. */
 .golink { color: inherit; text-decoration: underline; text-underline-offset: 2px; opacity: 0.85; cursor: pointer; }
 .golink:hover { opacity: 1; }
-dialog.era { max-width: 440px; text-align: left; }
-dialog.era p { margin: 8px 0; }
+dialog.story { max-width: 440px; text-align: left; }
+dialog.story p { margin: 8px 0; }
+dialog.story .story-kicker { margin: 0 0 6px -4px; }
+dialog.story .story-art { margin: -4px 0 10px; text-align: center; }
+dialog.story .story-art img { max-width: 100%; max-height: 220px; object-fit: contain; }

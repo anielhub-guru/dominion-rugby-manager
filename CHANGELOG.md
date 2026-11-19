@@ -6,6 +6,9 @@ drift apart). It is shown in the app footer and on the new-game screen.
 
 ## Unreleased
 
+- Story moments: one reusable announcement popup (`showStory` in `src/viewer/story.ts`) with a tag, title, text, optional
+  picture and a button. Moments queue, so two in a row never stack. The followed-player announcement uses it, and
+  signing a followed player now gets its own moment when you confirm the offseason. Future events can call it too.
 - Followed players: the FOLLOWED tag now shows wherever the player is named (squad, stats, scouting, training, the
   offseason lists, recommendations and compare), including while they are marked RETIRING or SELLING. The History
   tab tells more of the career: age and overall on entering the intake, and for each season the club's league finish,
