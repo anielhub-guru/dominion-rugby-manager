@@ -52,7 +52,7 @@ export function showStory(story: Story) {
     ready = true;
   }
   queue.push(story);
-  if (!dialog.open) if (!dialog.open) queueMicrotask(() => { if (!dialog.open) showNext(); });
+  if (!dialog.open) queueMicrotask(() => { if (!dialog.open) showNext(); });
 }
 
 export const storyOpen = () => dialog.open;
