@@ -8,24 +8,32 @@
     <style>
       /* Boot loader: lives inside #app and is wiped by the first render. Inline so it paints before the CSS/JS bundles arrive. */
       .boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: #0e1412; color: #6f8a77; font: 12px ui-monospace, Menlo, Consolas, monospace; letter-spacing: .25em; }
-      .boot svg { width: 96px; height: 96px; animation: boot-spin 1.1s cubic-bezier(.5, .1, .5, .9) infinite, boot-bob 1.1s ease-in-out infinite; }
+      .boot svg { width: 110px; height: 110px; overflow: visible; animation: boot-bob 1.1s ease-in-out infinite; }
+      /* The ball holds a fixed tilt and spins about its long axis, like a spiral pass: laces and seams orbit across the ball. */
+      .boot .turn { transform-box: fill-box; transform-origin: center; animation: boot-turn .9s linear infinite; }
       .boot .shadow { width: 56px; height: 8px; border-radius: 50%; background: #000; opacity: .45; margin-top: -6px; animation: boot-shadow 1.1s ease-in-out infinite; }
       .boot b { font-weight: 400; animation: boot-pulse 1.4s ease-in-out infinite; }
-      @keyframes boot-spin { to { rotate: 360deg; } }
+      @keyframes boot-turn { 0.0% { translate: 0 0.0px; scale: 1 1.00; opacity: 1.00; } 8.33% { translate: 0 12.0px; scale: 1 0.87; opacity: 1.00; } 16.67% { translate: 0 20.8px; scale: 1 0.50; opacity: 1.00; } 25.0% { translate: 0 24.0px; scale: 1 0.04; opacity: 0.00; } 33.33% { translate: 0 20.8px; scale: 1 0.04; opacity: 0.00; } 41.67% { translate: 0 12.0px; scale: 1 0.04; opacity: 0.00; } 50.0% { translate: 0 0.0px; scale: 1 0.04; opacity: 0.00; } 58.33% { translate: 0 -12.0px; scale: 1 0.04; opacity: 0.00; } 66.67% { translate: 0 -20.8px; scale: 1 0.04; opacity: 0.00; } 75.0% { translate: 0 -24.0px; scale: 1 0.04; opacity: 0.00; } 83.33% { translate: 0 -20.8px; scale: 1 0.50; opacity: 1.00; } 91.67% { translate: 0 -12.0px; scale: 1 0.87; opacity: 1.00; } 100.0% { translate: 0 -0.0px; scale: 1 1.00; opacity: 1.00; } }
       @keyframes boot-bob { 0%, 100% { translate: 0 10px; } 50% { translate: 0 -14px; } }
       @keyframes boot-shadow { 0%, 100% { transform: scale(1); opacity: .45; } 50% { transform: scale(.55); opacity: .2; } }
       @keyframes boot-pulse { 50% { opacity: .35; } }
-      @media (prefers-reduced-motion: reduce) { .boot svg, .boot .shadow { animation: none; } }
+      @media (prefers-reduced-motion: reduce) { .boot svg, .boot .shadow, .boot .turn { animation: none; } }
     </style>
   </head>
   <body>
     <div id="app">
       <div class="boot" role="status" aria-label="Loading">
         <svg viewBox="0 0 100 100" aria-hidden="true">
-          <g transform="rotate(-35 50 50)">
-            <ellipse cx="50" cy="50" rx="44" ry="27" fill="#8fe3a6" stroke="#cfe8d5" stroke-width="3" />
-            <path d="M14 50h72M42 44v12M50 43v14M58 44v12" stroke="#0e1412" stroke-width="3" stroke-linecap="round" fill="none" />
-            <path d="M24 36q26-14 52 0M24 64q26 14 52 0" stroke="#0e1412" stroke-opacity=".35" stroke-width="2" fill="none" />
+          <defs><clipPath id="boot-ball"><ellipse cx="50" cy="50" rx="44" ry="27" /></clipPath></defs>
+          <g transform="rotate(-30 50 50)">
+            <ellipse cx="50" cy="50" rx="44" ry="27" fill="#8fe3a6" />
+            <g clip-path="url(#boot-ball)" stroke="#0e1412" stroke-linecap="round" fill="none">
+              <g class="turn" style="animation-delay:0s"><path d="M18 50h64" stroke-width="3" /><path d="M40 44v12M50 43v14M60 44v12" stroke-width="3" /></g>
+              <g class="turn" style="animation-delay:-.225s"><path d="M4 50h92" stroke-width="2" stroke-opacity=".45" /></g>
+              <g class="turn" style="animation-delay:-.45s"><path d="M4 50h92" stroke-width="2" stroke-opacity=".45" /></g>
+              <g class="turn" style="animation-delay:-.675s"><path d="M4 50h92" stroke-width="2" stroke-opacity=".45" /></g>
+            </g>
+            <ellipse cx="50" cy="50" rx="44" ry="27" fill="none" stroke="#cfe8d5" stroke-width="3" />
           </g>
         </svg>
         <div class="shadow"></div>
