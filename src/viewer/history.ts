@@ -4,6 +4,7 @@ import { chronicleLines, type EraProspect } from "../league/era";
 import { overall } from "../league/teams";
 import { isSeasonOver, seasonRecordFor, teamById, type SeasonRecord, type SeasonState } from "../league/season";
 
+const ord = (n: number) => `${n}${n >= 11 && n <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th")}`;
 const name = (s: SeasonState, id?: string) => (id ? teamById(s, id).name : "-");
 
 /** Completed seasons, plus the season just finished if the next one has not started yet. */
@@ -86,7 +87,9 @@ export function followedCard(s: SeasonState): HTMLElement {
     const facts = [e.role, whereNow(s, e), ...(p ? [`age ${p.age}`, `overall ${overall(p)}`] : [])].join(" · ");
     sec.append(h("h2", { class: "sub" }, e.name), h("div", { class: "hint" }, facts));
     sec.append(h("ul", { class: "chronicle" }, ...chronicleLines(e, nameOf).map((l) => h("li", {}, l))));
-    if (e.seasons.length) sec.append(table(["Season", "Club", "Apps", "Points"], e.seasons.map((x) => [`Season ${x.season}`, nameOf(x.clubId), String(x.apps), String(x.points ?? 0)])));
+    if (e.seasons.length) sec.append(table(["Season", "Club", "Club finished", "Age", "Overall", "Apps", "Points"], e.seasons.map((x) => [`Season ${x.season}`, nameOf(x.clubId), x.position ? ord(x.position) : "-", x.age ? String(x.age) : "-", x.overall ? String(x.overall) : "-", x.matches ? `${x.apps} of ${x.matches}` : String(x.apps), String(x.points ?? 0)])));
+    else if (e.status === "unattached") sec.append(h("div", { class: "hint" }, `No club yet. ${e.windowLeft ?? 0} ${e.windowLeft === 1 ? "offseason" : "offseasons"} left in which a club may sign them.`));
+    else if (e.status === "playing") sec.append(h("div", { class: "hint" }, "No season on a roster completed yet."));
     if (e.summary) sec.append(h("div", { class: "hint" }, e.summary));
   }
   return sec;

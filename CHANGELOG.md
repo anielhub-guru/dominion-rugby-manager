@@ -6,6 +6,11 @@ drift apart). It is shown in the app footer and on the new-game screen.
 
 ## Unreleased
 
+- Followed players: the FOLLOWED tag now shows wherever the player is named (squad, stats, scouting, training, the
+  offseason lists, recommendations and compare), including while they are marked RETIRING or SELLING. The History
+  tab tells more of the career: age and overall on entering the intake, and for each season the club's league finish,
+  age, overall and appearances out of matches, plus a line when their club won the league. Seasons recorded by older
+  saves show a dash for what was not kept.
 - Club facilities, on their own Projects tab (key 4; the others move along one). Build a Training ground (one more
   player trains each matchday), a Medical centre (injuries last a match less, never under one, and tired players
   recover faster) or a Youth academy (prospects arrive with +2 potential). Each has three levels costing 1m, 2m and

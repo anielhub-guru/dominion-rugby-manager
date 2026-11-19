@@ -795,7 +795,11 @@ export function startNextSeason(prev: SeasonState): SeasonState {
     if (e.status !== "playing") continue;
     const club = state.teams.find((t) => t.players.some((p) => p.id === e.id));
     if (!club) e.status = "closed";
-    else news.push(...recordEraSeason(e, lastSeason, club.id, played[e.id]?.apps ?? 0, matches, club.name, played[e.id]?.points ?? 0));
+    else {
+      const p = club.players.find((x) => x.id === e.id)!;
+      const position = table.findIndex((r) => r.teamId === club.id) + 1;
+      news.push(...recordEraSeason(e, lastSeason, club.id, played[e.id]?.apps ?? 0, matches, club.name, played[e.id]?.points ?? 0, { position, age: p.age, overall: overall(p) }));
+    }
   }
   // Season finances: prize money for the finishing position, less the wage bill.
   const prize = prizeFor(finish);

@@ -1,6 +1,6 @@
 import { hashSeed, Rng } from "../engine/rng";
 import type { Player, Role, Team } from "../engine/types";
-import { makeProspects } from "./teams";
+import { makeProspects, overall } from "./teams";
 
 /**
  * Era prospects: now and then the intake marks one youngster and the game follows whatever career the simulation
@@ -10,13 +10,28 @@ import { makeProspects } from "./teams";
 
 export type EraStatus = "intake" | "unattached" | "playing" | "retired" | "closed";
 
-export type ChronicleKey = "introduced" | "no-contract" | "joined" | "debut" | "first-regular-season" | "retired";
+export type ChronicleKey = "introduced" | "no-contract" | "joined" | "debut" | "first-regular-season" | "title" | "retired";
 
 export interface ChronicleEntry {
   season: number;
   key: ChronicleKey;
   clubId?: string;
   value?: number;
+}
+
+/** One season on a roster. The optional fields are absent on seasons recorded by older saves. */
+export interface SeasonLine {
+  season: number;
+  clubId: string;
+  apps: number;
+  points?: number;
+  /** Matches the club played that season. */
+  matches?: number;
+  /** The club's league finish. */
+  position?: number;
+  /** Age and overall at the end of the season. */
+  age?: number;
+  overall?: number;
 }
 
 export interface EraProspect {
@@ -33,7 +48,10 @@ export interface EraProspect {
   /** Offseasons left in which an AI club may sign an unattached prospect. */
   windowLeft?: number;
   /** One line per season spent on a roster. */
-  seasons: { season: number; clubId: string; apps: number; points?: number }[];
+  seasons: SeasonLine[];
+  /** Age and overall when the intake introduced them. Absent on older saves. */
+  introducedAge?: number;
+  introducedOverall?: number;
   /** Set once the manager has been shown the "followed player joined the shortlist" popup. */
   announced?: boolean;
   /** The retirement entry, kept for the profile. */
@@ -78,6 +96,8 @@ export const newEraProspect = (p: Player, originClubId: string, season: number):
   originClubId,
   introducedSeason: season,
   status: "intake",
+  introducedAge: p.age,
+  introducedOverall: overall(p),
   seasons: [],
   chronicle: [{ season, key: "introduced", clubId: originClubId }],
 });
@@ -95,9 +115,10 @@ export const joinedElsewhereNews = (name: string, originName: string, introduced
   `A first chance elsewhere. ${name}, not signed by ${originName} in the season ${introducedSeason} intake, joins ${clubName}.`;
 
 /** The season just played, recorded for a player on a roster. Returns news lines and adds chronicle facts. */
-export function recordEraSeason(r: EraProspect, season: number, clubId: string, apps: number, matches: number, clubName: string, points = 0): string[] {
+export function recordEraSeason(r: EraProspect, season: number, clubId: string, apps: number, matches: number, clubName: string, points = 0, extra: Pick<SeasonLine, "position" | "age" | "overall"> = {}): string[] {
   const earlier = r.seasons.filter((x) => x.season < season);
-  r.seasons.push({ season, clubId, apps, points });
+  r.seasons.push({ season, clubId, apps, points, matches, ...extra });
+  if (extra.position === 1 && apps > 0) r.chronicle.push({ season, key: "title", clubId, value: apps });
   const before = earlier.reduce((t, x) => t + x.apps, 0);
   const prev = earlier[earlier.length - 1];
   if (prev && prev.clubId !== clubId) r.chronicle.push({ season, key: "joined", clubId });
@@ -140,11 +161,12 @@ export function chronicleLines(r: EraProspect, nameOf: (clubId: string) => strin
   const text = (c: ChronicleEntry): string => {
     const club = c.clubId ? nameOf(c.clubId) : "";
     switch (c.key) {
-      case "introduced": return `Entered the youth intake of ${club}`;
+      case "introduced": return `Entered the youth intake of ${club}${r.introducedAge ? `, aged ${r.introducedAge}, overall ${r.introducedOverall}` : ""}`;
       case "no-contract": return "No contract offered";
       case "joined": return `Joined ${club}`;
       case "debut": return `Made league debut for ${club}`;
       case "first-regular-season": return `First regular season at ${club}`;
+      case "title": return `${club} won the league, with ${c.value} ${c.value === 1 ? "appearance" : "appearances"} from them`;
       case "retired": return c.value ? `Retired, aged ${c.value}` : "Retired";
     }
   };

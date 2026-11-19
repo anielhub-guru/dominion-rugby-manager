@@ -340,6 +340,11 @@ function formChips(s: SeasonState, id: string): HTMLElement {
   return h("span", { class: "form" }, ...(f.length ? f.map((r) => h("span", { class: `chip ${r}` }, r)) : [h("span", { class: "dim" }, "no games yet")]));
 }
 
+/** The tag for a player Dominion follows, shown wherever the player is named so it never depends on the screen. */
+function followedChip(id: string): HTMLElement | null {
+  return state?.eraProspects?.some((e) => e.id === id) ? h("span", { class: "card-chip y", title: "Dominion follows this career. Their potential is not special: they may play for years or never get a contract. See the History tab." }, "FOLLOWED") : null;
+}
+
 function playerTable(team: Team, opts: { selectable?: boolean } = {}): HTMLElement {
   const t = h("table", { class: "squad" });
   const showPot = team.id === state?.managedId;
@@ -355,7 +360,7 @@ function playerTable(team: Team, opts: { selectable?: boolean } = {}): HTMLEleme
     const shown = oop ? slotPlayer(p, slot as Player["role"]) : p;
     const tr = h("tr", { class: `${slot === "Bench" || slot === "Reserve" ? "bench" : "starter"} ${selectedPlayer === p.id ? "sel" : ""}` },
       h("td", { class: "slot" }, slot),
-      h("td", { class: "club" }, p.name, oop ? h("span", { class: "oop", title: "Out of position: -5 to every attribute" }, " ⚠ -5") : null, isSuspended(p) ? h("span", { class: "card-chip r", title: `Banned after a red card: misses the next ${p.ban === 1 ? "match" : `${p.ban} matches`}` }, p.ban! > 1 ? `BANNED ${p.ban}` : "SUSPENDED") : null, isInjured(p) ? h("span", { class: "card-chip y", title: `${p.injury!.label}: out for the next ${p.injury!.games === 1 ? "match" : `${p.injury!.games} matches`}. Healed over the offseason.` }, `INJURED ${p.injury!.games}`) : null, (p.tired ?? 0) >= 8 ? h("span", { class: "oop", title: `Tired from recent matches (${Math.round(p.tired!)}/100): starts the match slightly weaker and tires faster. High stamina recovers quicker. Rest a player to freshen them.` }, (p.tired ?? 0) >= 20 ? " ● Tired" : " ● Weary") : null, p.retiring ? h("span", { class: "card-chip r", title: "Retires when you confirm your offseason signings" }, "RETIRING") : null),
+      h("td", { class: "club" }, p.name, followedChip(p.id), oop ? h("span", { class: "oop", title: "Out of position: -5 to every attribute" }, " ⚠ -5") : null, isSuspended(p) ? h("span", { class: "card-chip r", title: `Banned after a red card: misses the next ${p.ban === 1 ? "match" : `${p.ban} matches`}` }, p.ban! > 1 ? `BANNED ${p.ban}` : "SUSPENDED") : null, isInjured(p) ? h("span", { class: "card-chip y", title: `${p.injury!.label}: out for the next ${p.injury!.games === 1 ? "match" : `${p.injury!.games} matches`}. Healed over the offseason.` }, `INJURED ${p.injury!.games}`) : null, (p.tired ?? 0) >= 8 ? h("span", { class: "oop", title: `Tired from recent matches (${Math.round(p.tired!)}/100): starts the match slightly weaker and tires faster. High stamina recovers quicker. Rest a player to freshen them.` }, (p.tired ?? 0) >= 20 ? " ● Tired" : " ● Weary") : null, p.retiring ? h("span", { class: "card-chip r", title: "Retires when you confirm your offseason signings" }, "RETIRING") : null),
       h("td", {}, p.role),
       h("td", {}, String(p.age)),
       ...(showPot ? [h("td", { class: "stars", title: `Potential ${p.potential ?? "?"}` }, p.potential ? stars(p.potential) : "")] : []),
@@ -417,7 +422,7 @@ function statsTable(s: SeasonState, team: Team, rerender: () => void): HTMLEleme
       if (k === "kick") return tot.conversions * 2 + tot.penaltyGoals * 3 + tot.dropGoals * 3;
       return (tot as unknown as Record<string, number>)[k] ?? 0;
     };
-    body.append(h("tr", {}, h("td", { class: "club" }, p.name), ...(season ? [] : [h("td", {}, String(careerLine(s, p.id).seasons))]), ...cols.map(([, k]) => h("td", { class: k === "yellows" && get(k) ? "yc" : k === "reds" && get(k) ? "rc" : "" }, String(get(k))))));
+    body.append(h("tr", {}, h("td", { class: "club" }, p.name, followedChip(p.id)), ...(season ? [] : [h("td", {}, String(careerLine(s, p.id).seasons))]), ...cols.map(([, k]) => h("td", { class: k === "yellows" && get(k) ? "yc" : k === "reds" && get(k) ? "rc" : "" }, String(get(k))))));
   }
   t.append(body);
   return h("div", {}, toggle, t);
@@ -533,7 +538,7 @@ function offseasonView(s: SeasonState): HTMLElement {
     const l = intake.market.find((x) => x.player.id === p.id);
     return l ? `Asking ${fmtMoney(l.price)}` : `Sale if unsigned ${fmtMoney(teenSalePrice(p))}`;
   };
-  const eraChip = (p: Player) => (s.eraProspects?.some((e) => e.id === p.id) ? h("span", { class: "card-chip y", title: "Dominion follows this career. Their potential is not special: they may play for years or never get a contract." }, "FOLLOWED") : null);
+  const eraChip = (p: Player) => followedChip(p.id);
   const nameCell = (p: Player, ...chips: (Node | null)[]) => h("td", { class: "club" }, h("div", { class: "namecell" }, portrait(p, "sm"), h("span", { class: "link", title: "Compare this player", onclick: () => inspect(p.id) }, p.name), ...chips));
 
   // 1. Your squad: sell anyone not retiring.
@@ -545,7 +550,7 @@ function offseasonView(s: SeasonState): HTMLElement {
     const sold = plan.sell.includes(p.id);
     sb.append(
       h("tr", { class: `${gone || sold ? "bench" : ""} ${p.id === focus?.id ? "insp" : ""}` },
-        nameCell(p, gone ? h("span", { class: "card-chip r" }, "RETIRING") : eraChip(p), sold ? h("span", { class: "card-chip y" }, "SELLING") : null),
+        nameCell(p, eraChip(p), gone ? h("span", { class: "card-chip r" }, "RETIRING") : null, sold ? h("span", { class: "card-chip y" }, "SELLING") : null),
         h("td", {}, p.role), h("td", {}, String(p.age)), h("td", { class: "stars" }, stars(p.potential ?? 0)), ...attrCells(p),
         h("td", { class: "pts" }, String(overall(p))), h("td", {}, fmtMoney(sellPrice(p))), h("td", {}, fmtMoney(wageOf(p))),
         h("td", {}, actionFor(p))),
@@ -577,7 +582,7 @@ function offseasonView(s: SeasonState): HTMLElement {
     const p = l.player;
     mb.append(
       h("tr", { class: `${plan.buy.includes(p.id) ? "sel" : ""} ${p.id === focus?.id ? "insp" : ""}` },
-        nameCell(p), h("td", {}, teamById(s, l.clubId).short), h("td", {}, p.role), h("td", {}, String(p.age)), h("td", { class: "stars" }, stars(p.scouted ?? 0)), ...attrCells(p),
+        nameCell(p, eraChip(p)), h("td", {}, teamById(s, l.clubId).short), h("td", {}, p.role), h("td", {}, String(p.age)), h("td", { class: "stars" }, stars(p.scouted ?? 0)), ...attrCells(p),
         h("td", { class: "pts" }, String(overall(p))), h("td", {}, fmtMoney(l.price)),
         h("td", {}, actionFor(p))),
     );
@@ -593,7 +598,7 @@ function offseasonView(s: SeasonState): HTMLElement {
       portrait(r.player, "lg"),
       h("div", { class: "rec-body" },
         h("div", { class: "rec-need" }, r.need, h("span", { class: `card-chip ${r.source === "youth" ? "y" : r.price === "dear" ? "r" : ""}` }, tag)),
-        h("div", { class: "rec-name" }, link(r.player), h("span", { class: "dim" }, `  ${r.role}, ${r.player.age}`)),
+        h("div", { class: "rec-name" }, link(r.player), eraChip(r.player), h("span", { class: "dim" }, `  ${r.role}, ${r.player.age}`)),
         h("div", {}, h("b", {}, `Overall ${overall(r.player)}`), " ", h("span", { class: "stars" }, stars(r.player.scouted ?? 0)), h("span", { class: "dim" }, `  ${moneyLine(r.player)}`)),
         h("div", { class: "dim" }, ...parts(r.detail)),
         h("div", { class: "toolbar" }, cmp, actionFor(r.player))));
@@ -636,7 +641,7 @@ function offseasonView(s: SeasonState): HTMLElement {
       compareId = sel.value || null;
       render();
     };
-    const head = (p: Player) => h("div", { class: "cmp-head" }, portrait(p, "lg"), h("div", {}, h("b", {}, p.name), h("div", { class: "dim" }, `${p.role}, age ${p.age}${isOwn(p) ? " (yours)" : ""}`), h("div", {}, h("b", { class: "big" }, String(overall(p))), " ", h("span", { class: "stars" }, stars(isOwn(p) ? (p.potential ?? 0) : (p.scouted ?? 0)))), h("div", { class: "dim" }, moneyLine(p)), h("div", { class: "toolbar" }, actionFor(p))));
+    const head = (p: Player) => h("div", { class: "cmp-head" }, portrait(p, "lg"), h("div", {}, h("b", {}, p.name), eraChip(p), h("div", { class: "dim" }, `${p.role}, age ${p.age}${isOwn(p) ? " (yours)" : ""}`), h("div", {}, h("b", { class: "big" }, String(overall(p))), " ", h("span", { class: "stars" }, stars(isOwn(p) ? (p.potential ?? 0) : (p.scouted ?? 0)))), h("div", { class: "dim" }, moneyLine(p)), h("div", { class: "toolbar" }, actionFor(p))));
     const other = chosen === "five" ? h("div", { class: "cmp-head" }, h("div", {}, h("b", {}, "Your best five"), h("div", { class: "dim" }, "Average of your starters after the plan"))) : head(chosen);
     body.push(
       h("div", { class: "cmp-heads" }, head(focus), other),
@@ -1163,7 +1168,7 @@ function trainingView(s: SeasonState): HTMLElement {
     const growing = p.age <= 27 && !capped && done > 0;
     const paceLabel = !growing ? "" : pace >= 1 ? "Fast" : pace >= 0.75 ? "Steady" : "Stalling: needs games";
     body.append(h("tr", {},
-      h("td", { class: "club" }, p.name),
+      h("td", { class: "club" }, p.name, followedChip(p.id)),
       h("td", {}, String(p.age)),
       h("td", {}, String(overall(p))),
       h("td", { title: capped ? "At potential: training can no longer improve this player" : "" }, stars(p.potential ?? 0) + (capped ? " max" : "")),
