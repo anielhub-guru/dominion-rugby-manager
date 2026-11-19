@@ -6,6 +6,8 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  // Relative base so the web build works from a sub-path (GitHub Pages) as well as in Tauri.
+  base: "./",
   clearScreen: false,
   server: { port: 1420, strictPort: true },
   build: { target: "es2022", outDir: "dist" },
