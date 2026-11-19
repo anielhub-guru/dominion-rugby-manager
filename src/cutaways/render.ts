@@ -1,4 +1,4 @@
-import { ART_HAIR, BRAID_LINES, HAIR_PARTS, HEAD_CLEAR, HEAD_STYLES, SCALP, STORY, STORY_HEADS, TIMING, type HeadMark, type Kind, type StoryKind, type Transition } from "./data";
+import { ART_HAIR, BRAID_LINES, HAIR_PARTS, HEAD_CLEAR, HEAD_STYLES, SCALP, STORY, STORY_HEADS, TIMING, VERSIONS, type HeadMark, type Kind, type StoryKind, type Transition } from "./data";
 
 /** Artwork files (URLs only: an image is not fetched until a cutaway needs it). */
 const URLS = import.meta.glob("./art/*.webp", { query: "?url", import: "default", eager: true }) as Record<string, string>;
@@ -108,7 +108,10 @@ async function composite(kind: StoryKind, spec: (typeof STORY)[StoryKind], pose:
   const name = spec.art(pose);
   // A hairstyle drawn into this pose is used as is. Otherwise the nearest older art is used (with vector hair on top only for styles 1-4).
   const pick = (hair: number): { file: number; overlay: boolean } => {
-    if (urlOf(`${name}-${hair}`)) return { file: hair, overlay: false };
+    if (urlOf(`${name}-${hair}`)) {
+      const vectorVariant = pose > 0 && VERSIONS[kind] === 2 && hair > 0 && hair < 5;
+      return { file: hair, overlay: vectorVariant };
+    }
     const mapped = ART_HAIR[hair] ?? 0;
     const file = urlOf(`${name}-${mapped}`) ? mapped : 0;
     // Vector hair painted over older art looks badly layered for the newer styles (5+), so those fall back to the nearest drawn style.

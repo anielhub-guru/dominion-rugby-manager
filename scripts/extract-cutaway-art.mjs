@@ -96,6 +96,13 @@ const copy = (from, to) => { copyFileSync(resolve(variants, `${from}.webp`), new
 for (const kind of ["ankle", "card", "celebration", "double", "goal", "goalmiss", "huddle", "intercept", "lastditch", "pass"]) {
   for (let hair = 5; hair <= 9; hair++) copy(`${kind}-${hair}`, `${kind}-${hair}`);
 }
+// Every common action now has a second pose. Hairstyles 1-4 use the registered
+// vector overlay; hairstyles 5-9 are complete redraws of the alternate pose.
+for (const kind of ["ankle", "card", "celebration", "double", "goal", "goalmiss", "huddle", "intercept", "lastditch", "pass"]) {
+  copy(`${kind}-v2`, `${kind}1-0`);
+  for (let hair = 1; hair <= 4; hair++) copy(`${kind}-v2`, `${kind}1-${hair}`);
+  for (let hair = 5; hair <= 9; hair++) copy(`${kind}-v2-h${hair}`, `${kind}1-${hair}`);
+}
 for (const v of [1, 2]) {
   for (const kind of ["kickchase", "waist"]) {
     copy(`${kind}-v${v + 1}`, `${kind}${v}-0`);
