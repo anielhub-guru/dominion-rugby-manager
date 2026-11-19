@@ -143,6 +143,8 @@ export interface MatchEvent {
   player?: string;
   /** Id of the player involved, set for card events. */
   pid?: string;
+  /** On a try: the player who carried in the phase before, if another player. */
+  assist?: string;
   homeScore: number;
   awayScore: number;
 }
@@ -200,6 +202,15 @@ export interface BanReport {
   matches: number;
 }
 
+/** A defensive play near the line late in a match, with the defence ahead by `lead` points at the time. */
+export interface Stand {
+  id: string;
+  /** 0 = home, 1 = away. */
+  team: 0 | 1;
+  minute: number;
+  lead: number;
+}
+
 export interface MatchLog {
   id: string;
   season: number;
@@ -228,4 +239,6 @@ export interface MatchLog {
   injuries?: InjuryReport[];
   /** Suspensions handed out in this match. Missing on older logs, where every red meant one match. */
   bans?: BanReport[];
+  /** Late goal-line defence by a side that was narrowly ahead. Missing on older logs. */
+  stands?: Stand[];
 }

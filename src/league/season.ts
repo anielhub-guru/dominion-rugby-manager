@@ -11,7 +11,8 @@ import { BONUS_FLAVOUR, MATCH_PAY, earnsSquadSlot, MAX_BUYS, MONEY_START, fmtMon
 import { DEFAULT_START_YEAR } from "./calendar";
 import { MAX_SPONSOR_DEALS, SPONSOR_LAPSE_MATCHDAY, describeCondition, fanOffer, judgeFanDeal, judgeSeasonDeal, sponsorOffers, type Deal } from "./deals";
 import { FACILITIES, FACILITY_IDS, MAX_FACILITY_LEVEL, OFFER_FORMS, PROPOSAL_CHANCE, PROPOSAL_LAPSE_MATCHDAY, SPONSORS, academyBonus, geniusChance, levelOf, projectDuration, recoveryBonus, reducedInjury, trainingSlots, upgradeCost, type FacilityId, type FacilityLevels } from "./facilities";
-import { ERA_WINDOW, eraDue, isLive, joinedElsewhereNews, introNews, makeEraProspect, newEraProspect, noContractNews, recordEraSeason, retirementNews, returns, type EraProspect } from "./era";
+import { recordMatches } from "./moments";
+import { ERA_WINDOW, closeEraLedger, eraDue, isLive, joinedElsewhereNews, introNews, makeEraProspect, newEraProspect, noContractNews, recordEraSeason, retirementNews, returns, type EraProspect } from "./era";
 import { RESERVE_COUNT, makeGenius, evolvePlayers, playShare, generateTeams, makeReserves, initialPotential, makeProspects, objectiveTarget, overall, teamRating } from "./teams";
 
 export { describeLine, impact };
@@ -664,6 +665,12 @@ function recordPlayers(state: SeasonState, logs: MatchLog[]): string[] {
       if (who) who.p.injury = { label: i.label, games: who.t.id === state.managedId ? reducedInjury(i.games, facilitiesOf(state)) : i.games };
     }
   }
+  // Followed players on a roster: note what these matches showed about them.
+  for (const e of state.eraProspects ?? []) {
+    if (e.status !== "playing") continue;
+    const club = state.teams.find((t) => t.players.some((p) => p.id === e.id));
+    if (club) e.ledger = recordMatches(e.ledger, e.id, club.id, state.season, logs);
+  }
   const mine = logs.find((l) => l.homeId === state.managedId || l.awayId === state.managedId);
   const team = teamById(state, state.managedId);
   if (mine?.players) {
@@ -799,6 +806,7 @@ export function startNextSeason(prev: SeasonState): SeasonState {
       const p = club.players.find((x) => x.id === e.id)!;
       const position = table.findIndex((r) => r.teamId === club.id) + 1;
       news.push(...recordEraSeason(e, lastSeason, club.id, played[e.id]?.apps ?? 0, matches, club.name, played[e.id]?.points ?? 0, { position, age: p.age, overall: overall(p) }));
+      closeEraLedger(e);
     }
   }
   // Season finances: prize money for the finishing position, less the wage bill.
@@ -867,6 +875,7 @@ export function startNextSeason(prev: SeasonState): SeasonState {
         delete waiting.windowLeft;
         waiting.status = "playing";
         waiting.chronicle.push({ season, key: "joined", clubId: team.id });
+        waiting.chronicle.push({ season, key: "replaced", clubId: team.id, otherId: r.id, otherName: r.name, value: r.age });
         news.push(joinedElsewhereNews(waiting.name, teamById(state, waiting.originClubId).name, waiting.introducedSeason, team.name));
         delete state.careerStats[r.id];
         continue;
@@ -1105,6 +1114,8 @@ export function completeOffseason(prev: SeasonState, plan: OffseasonPlan): Seaso
     if (plan.sign.includes(e.id)) {
       e.status = "playing";
       e.chronicle.push({ season, key: "joined", clubId: team.id });
+      const gone = team.players.find((p) => retiring.has(p.id) && p.role === e.role);
+      if (gone) e.chronicle.push({ season, key: "replaced", clubId: team.id, otherId: gone.id, otherName: gone.name, value: gone.age });
     } else {
       news.push(passOnEra(e, intake.prospects.find((p) => p.id === e.id), season));
     }

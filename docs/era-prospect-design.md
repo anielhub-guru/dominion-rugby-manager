@@ -161,3 +161,16 @@ Step 1 alone is a playable test of whether users remember the name.
 ## Out of scope
 
 Branch managers, a general event bus, AI-written narrative, survival protection, a general release system, simulating careers outside the league.
+
+
+## Story moments (built)
+
+Detectors in `src/league/moments.ts` read finished match logs for followed players on a roster; they never affect a
+match. The engine records `pid` on scoring events, `assist` on tries and `stands` on the log. A per-season ledger
+(`EraProspect.ledger`) keeps one character per match for the player and each scoring teammate, plus assist counts and
+the best few deciding moments. When the season closes it becomes chronicle entries: at most one moment and two pair
+patterns, ten story lines per career. Thresholds sit in `PAIR_MIN` (`wording.ts`) and `DECIDED_MARGIN`.
+
+Wording (`src/league/wording.ts`) is a bank of variants chosen by hash of career, season and the other player, so
+lines are stable. This relaxes the earlier "no labels" rule on purpose: relationship colour words ("a friendly
+rivalry", "a standing arrangement") are allowed, but still describe the pattern and never a feeling or a promise.

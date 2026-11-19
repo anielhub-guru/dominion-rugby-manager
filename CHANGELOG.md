@@ -6,6 +6,14 @@ drift apart). It is shown in the app footer and on the new-game screen.
 
 ## Unreleased
 
+- Story moments for followed players. The match engine now records who scored each try and who carried in the phase
+  before (a try assist, or the kicker on a grubber or chip), and late goal-line defence by a side narrowly ahead.
+  When a season closes, the History tab's chronicle can add up to one deciding moment (the try or kick that won a
+  match, or the last big stop in a narrow win) and up to two patterns with a teammate (setting up their tries, being
+  set up by them, scoring in turn over five or more matches, scoring in the same match four or more times), plus a
+  line when they took over from a retiring player's role. Most seasons add nothing. Wording comes from banks of
+  variants with colour words (such as "a friendly rivalry" or "a dependable supply line"), chosen steadily per entry.
+  An "Alongside" line lists the teammates in a career. Matches played before this version carry no assists.
 - Story moments: one reusable announcement popup (`showStory` in `src/viewer/story.ts`) with a tag, title, text, optional
   picture and a button. Moments queue, so two in a row never stack. The followed-player announcement uses it, and
   signing a followed player now gets its own moment when you confirm the offseason. Future events can call it too.

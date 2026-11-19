@@ -5,7 +5,7 @@ import { WeatherTalk, weatherFor, type Weather } from "./weather";
 import { DERBY, DerbyTalk } from "./derby";
 import { INJURY_RATE, SECOND_YELLOW, rollInjury, rollOffence } from "./injury";
 import { ROLES, emptyTotals } from "./types";
-import type { Attr, BanReport, EventType, InjuryReport, MatchEvent, MatchLog, Player, PlayerLine, Role, ShapeId, TacticId, Team, TeamStats } from "./types";
+import type { Attr, BanReport, EventType, InjuryReport, MatchEvent, MatchLog, Player, PlayerLine, Role, ShapeId, Stand, TacticId, Team, TeamStats } from "./types";
 
 /**
  * "Dominion": a rugby-inspired territory game, 5v5 on a 100m arena.
@@ -192,6 +192,7 @@ interface Info {
   ki?: number;
   side?: -1 | 1;
   pid?: string;
+  assist?: string;
 }
 
 type MissKind = "post" | "wide" | "short";
@@ -323,6 +324,9 @@ export class MatchSim {
   private att: 0 | 1 = 0;
   private pos = 35;
   private tackles = 0;
+  /** The last player to carry in the current possession. Observation only: it never changes what happens. */
+  private chain: { side: 0 | 1; id: string } | null = null;
+  private stands: Stand[] = [];
   /** After an attacking side loses the ball, the side that won it counters: extra metres on its next carry. */
   private counterSide: -1 | 0 | 1 = -1;
   private counterBonus = 0;
@@ -479,6 +483,7 @@ export class MatchSim {
       ...(this.input.derby ? { derby: true } : {}),
       ...(this.injuries.length ? { injuries: this.injuries } : {}),
       ...(this.bans.length ? { bans: this.bans } : {}),
+      ...(this.stands.length ? { stands: this.stands } : {}),
     };
   }
 
@@ -537,12 +542,26 @@ export class MatchSim {
       team,
       player,
       pid: info?.pid,
+      ...(info?.assist ? { assist: info.assist } : {}),
       homeScore: this.sides[0].score,
       awayScore: this.sides[1].score,
     });
   }
 
+  /** The previous carrier in this possession, if it was another player: whoever set up a try. */
+  private assistFor(att: 0 | 1, scorerId: string): string | undefined {
+    return this.chain && this.chain.side === att && this.chain.id !== scorerId ? this.chain.id : undefined;
+  }
+
+  /** A defensive play deep in the closing minutes while the defence is ahead by no more than a try and a conversion. */
+  private noteStand(A: Side, D: Side, id: string, deep: boolean) {
+    const lead = D.score - A.score;
+    if (!deep || this.minute < 30 || lead < 1 || lead > 7) return;
+    this.stands.push({ id, team: D === this.sides[0] ? 0 : 1, minute: this.minute, lead });
+  }
+
   private give(newPos: number) {
+    this.chain = null;
     this.att = this.att === 0 ? 1 : 0;
     this.pos = newPos;
     this.tackles = 0;
@@ -761,7 +780,7 @@ export class MatchSim {
         A.score += 3;
         A.stats.penaltyGoals++;
         this.lineOf(A, k).penaltyGoals++;
-        this.emit("penalty-goal", this.narrator.penaltyGoal(f, high, postIn), true, att, k.name, goalX, { hl: true, variant: postIn ? "post-in" : "good", ai: A.field.indexOf(k), side });
+        this.emit("penalty-goal", this.narrator.penaltyGoal(f, high, postIn), true, att, k.name, goalX, { hl: true, variant: postIn ? "post-in" : "good", ai: A.field.indexOf(k), side, pid: k.id });
         this.give(35);
       } else {
         const kind = rng.pick(MISSES);
@@ -790,7 +809,7 @@ export class MatchSim {
       A.stats.conversions++;
       this.lineOf(A, k).conversions++;
       const text = this.narrator.conversion(kf, `${this.input.home.short} ${this.sides[0].score} - ${this.sides[1].score} ${this.input.away.short}.`, postIn);
-      this.emit("conversion", text, true, att, k.name, undefined, { hl: true, variant: postIn ? "post-in" : "good", ai: A.field.indexOf(k), side });
+      this.emit("conversion", text, true, att, k.name, undefined, { hl: true, variant: postIn ? "post-in" : "good", ai: A.field.indexOf(k), side, pid: k.id });
     } else {
       const kindMiss = rng.pick(MISSES);
       this.emit("conversion-miss", this.narrator.conversionMiss(kf, score, kindMiss), true, att, k.name, undefined, { hl: true, variant: kindMiss, ai: A.field.indexOf(k), side });
@@ -820,7 +839,7 @@ export class MatchSim {
       A.score += 5;
       A.stats.tries++;
       this.lineOf(A, chaser).tries++;
-      this.emit("try", this.narrator.try(this.facts(A, D, names), kind, A.score, D.score, this.minute), true, att, chaser.name, undefined, { ...info, variant: kind });
+      this.emit("try", this.narrator.try(this.facts(A, D, names), kind, A.score, D.score, this.minute), true, att, chaser.name, undefined, { ...info, variant: kind, pid: chaser.id, assist: k.id });
       this.convert(A, D, att);
       this.give(35);
     } else {
@@ -877,7 +896,7 @@ export class MatchSim {
         A.score += 3;
         A.stats.dropGoals++;
         this.lineOf(A, k).dropGoals++;
-        this.emit("drop-goal", this.narrator.dropGoal(f, postIn), true, att, k.name, goalX, { hl: true, variant: postIn ? "post-in" : "good", ai: A.field.indexOf(k), side });
+        this.emit("drop-goal", this.narrator.dropGoal(f, postIn), true, att, k.name, goalX, { hl: true, variant: postIn ? "post-in" : "good", ai: A.field.indexOf(k), side, pid: k.id });
         this.give(35);
       } else {
         const kind = rng.pick(MISSES);
@@ -903,7 +922,7 @@ export class MatchSim {
         A.score += 3;
         A.stats.dropGoals++;
         this.lineOf(A, k).dropGoals++;
-        this.emit("drop-goal", this.narrator.bombGoal(f), true, att, k.name, absX(att, 100), { hl: true, variant: "bomb", ai: A.field.indexOf(k) });
+        this.emit("drop-goal", this.narrator.bombGoal(f), true, att, k.name, absX(att, 100), { hl: true, variant: "bomb", ai: A.field.indexOf(k), pid: k.id });
         this.give(35);
       } else if (landed >= 100) {
         this.emit("kick", this.narrator.kickDead(this.facts(A, D, { k: k.name })), true, att, k.name, absX(att, 100), { hl: true, variant: "dead", ai: A.field.indexOf(k) });
@@ -937,6 +956,7 @@ export class MatchSim {
         A.stats.errors++;
         D.stats.turnoversWon++;
         this.lineOf(D, icp).turnovers++;
+        this.noteStand(A, D, icp.id, pos >= 70);
         this.give(100 - pos);
         this.pos = Math.min(95, this.pos + run);
         if (attacking) this.startCounter(fit);
@@ -996,7 +1016,7 @@ export class MatchSim {
         cl.lineBreaks++;
       }
       const kind = broke ? "break" : "power";
-      this.emit("try", this.narrator.try(this.facts(A, D, names), kind, A.score, D.score, this.minute), true, att, carrier.name, undefined, { hl: true, variant: kind, ai: A.field.indexOf(carrier), di: D.field.indexOf(tackler) });
+      this.emit("try", this.narrator.try(this.facts(A, D, names), kind, A.score, D.score, this.minute), true, att, carrier.name, undefined, { hl: true, variant: kind, ai: A.field.indexOf(carrier), di: D.field.indexOf(tackler), pid: carrier.id, assist: this.assistFor(att, carrier.id) });
       this.convert(A, D, att);
       this.give(35);
       return;
@@ -1005,6 +1025,8 @@ export class MatchSim {
     D.stats.tackles++;
     this.lineOf(D, tackler).tackles++;
     this.tackles++;
+    this.chain = { side: att, id: carrier.id };
+    this.noteStand(A, D, tackler.id, this.pos >= 85);
     this.checkInjury(A, D, carrier, tackler, broke);
     if (broke) {
       A.stats.lineBreaks++;

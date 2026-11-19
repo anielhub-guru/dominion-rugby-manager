@@ -1,6 +1,8 @@
 import { hashSeed, Rng } from "../engine/rng";
 import type { Player, Role, Team } from "../engine/types";
 import { makeProspects, overall } from "./teams";
+import { closeLedger, type Ledger } from "./moments";
+import { SHORT, storyText, type WordKey } from "./wording";
 
 /**
  * Era prospects: now and then the intake marks one youngster and the game follows whatever career the simulation
@@ -10,13 +12,20 @@ import { makeProspects, overall } from "./teams";
 
 export type EraStatus = "intake" | "unattached" | "playing" | "retired" | "closed";
 
-export type ChronicleKey = "introduced" | "no-contract" | "joined" | "debut" | "first-regular-season" | "title" | "retired";
+export type ChronicleKey = "introduced" | "no-contract" | "joined" | "debut" | "first-regular-season" | "title" | "retired" | WordKey;
 
 export interface ChronicleEntry {
   season: number;
   key: ChronicleKey;
   clubId?: string;
   value?: number;
+  /** Another player in the story, for pairs and replacements. */
+  otherId?: string;
+  otherName?: string;
+  /** The opposing club, and the final score from the player's club's side, for a deciding moment. */
+  vsId?: string;
+  score?: string;
+  minute?: number;
 }
 
 /** One season on a roster. The optional fields are absent on seasons recorded by older saves. */
@@ -54,6 +63,8 @@ export interface EraProspect {
   introducedOverall?: number;
   /** Set once the manager has been shown the "followed player joined the shortlist" popup. */
   announced?: boolean;
+  /** What the season in progress has shown about them. Turned into chronicle entries when the season closes. */
+  ledger?: Ledger;
   /** The retirement entry, kept for the profile. */
   summary?: string;
   /** Sparse permanent facts. Text is built from these when shown. */
@@ -168,7 +179,26 @@ export function chronicleLines(r: EraProspect, nameOf: (clubId: string) => strin
       case "first-regular-season": return `First regular season at ${club}`;
       case "title": return `${club} won the league, with ${c.value} ${c.value === 1 ? "appearance" : "appearances"} from them`;
       case "retired": return c.value ? `Retired, aged ${c.value}` : "Retired";
+      default: return storyText(c.key, { name: r.name, club, other: c.otherName, vs: c.vsId ? nameOf(c.vsId) : undefined, score: c.score, minute: c.minute, n: c.value, role: r.role, age: c.value }, r.id, c.season, c.otherId ?? c.vsId ?? "");
     }
   };
-  return r.chronicle.map((c) => `S${c.season} ${text(c)}`);
+  return [...r.chronicle].sort((a, b) => a.season - b.season).map((c) => `S${c.season} ${text(c)}`);
+}
+
+/** The other players in a career, with what the chronicle says about each. */
+export function alongside(r: EraProspect): { id: string; name: string; what: string[] }[] {
+  const out = new Map<string, { id: string; name: string; what: string[] }>();
+  for (const c of r.chronicle) {
+    if (!c.otherId || !c.otherName || !(c.key in SHORT)) continue;
+    const e = out.get(c.otherId) ?? { id: c.otherId, name: c.otherName, what: [] };
+    e.what.push(`${SHORT[c.key as keyof typeof SHORT]} (S${c.season})`);
+    out.set(c.otherId, e);
+  }
+  return [...out.values()];
+}
+
+/** Closes the season's ledger into the chronicle. */
+export function closeEraLedger(r: EraProspect) {
+  r.chronicle.push(...closeLedger(r.ledger, r.chronicle));
+  delete r.ledger;
 }
