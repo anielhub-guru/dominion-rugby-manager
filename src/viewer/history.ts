@@ -84,7 +84,7 @@ function careerPanel(s: SeasonState, e: EraProspect): HTMLElement {
   const p = s.teams.flatMap((t) => t.players).find((x) => x.id === e.id);
   const [chipText, chipCls] = STATUS_CHIP[e.status] ?? ["", ""];
   const facts = [e.role, whereNow(s, e), ...(p ? [`age ${p.age}`, `overall ${overall(p)}`] : [])].join(" · ");
-  const panel = h("section", { class: "career" },
+  const panel = h("section", { class: `career ${isLive(e) ? "" : "over"}` },
     h("div", { class: "career-head" }, h("h3", {}, e.name), h("span", { class: `card-chip ${chipCls}` }, chipText)),
     h("div", { class: "hint" }, facts));
 
@@ -108,11 +108,19 @@ function careerPanel(s: SeasonState, e: EraProspect): HTMLElement {
   return panel;
 }
 
-/** The careers Dominion follows. Live careers first, then the rest, newest first. */
-export function followedCard(s: SeasonState): HTMLElement {
+/** The careers Dominion follows, as tabs: live careers first, then retired or closed ones greyed, newest first in each. */
+export function followedCard(s: SeasonState, selected: string | null, pick: (id: string) => void): HTMLElement {
   const sec = h("section", { class: "card" }, h("h2", {}, "Followed careers"));
   const list = [...(s.eraProspects ?? [])].sort((a, b) => Number(isLive(b)) - Number(isLive(a)) || b.introducedSeason - a.introducedSeason);
   if (!list.length) return (sec.append(h("div", { class: "hint" }, "Now and then a youth intake marks one prospect. Dominion follows that career and keeps its facts here, whatever happens to them.")), sec);
-  sec.append(...list.map((e) => careerPanel(s, e)));
+  const current = list.find((e) => e.id === selected) ?? list[0];
+  const tabs = h("div", { class: "career-tabs", role: "tablist" });
+  for (const e of list) {
+    const over = !isLive(e);
+    const b = h("button", { class: `career-tab ${e.id === current.id ? "active" : ""} ${over ? "over" : ""}`, role: "tab", title: over ? `${e.name} has ${e.status === "retired" ? "retired" : "left the league"}` : e.name }, e.name, over ? h("small", {}, e.status === "retired" ? "retired" : "closed") : null);
+    b.onclick = () => pick(e.id);
+    tabs.append(b);
+  }
+  sec.append(tabs, careerPanel(s, current));
   return sec;
 }

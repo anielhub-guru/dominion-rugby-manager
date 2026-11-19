@@ -6,6 +6,8 @@ drift apart). It is shown in the app footer and on the new-game screen.
 
 ## Unreleased
 
+- History tab: followed careers are now tabs, one per player. Live careers come first, newest first; players who have
+  retired or left the league follow, greyed and marked "retired" or "closed". The first tab is open by default.
 - Followed players now have stories against other clubs. The chronicle records the first meeting with the club that
   introduced them (whether it passed on them or they left it), with the score and whether they scored. Across a
   career it also notices scoring runs against a club, long droughts (only for players who score elsewhere), unbeaten
