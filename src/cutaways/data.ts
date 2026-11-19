@@ -94,6 +94,13 @@ export const VERSIONS: Partial<Record<StoryKind, number>> = {
 };
 
 /**
+ * Kinds whose second pose was only drawn for lab hairstyles 0 and 5-9. Puff, hijab, bob and braided bun (1-4) have no
+ * drawing in that pose, and vector hair laid over the braided original floats off the head, so those players keep pose 0.
+ */
+export const ALTERNATE_POSE_HAIR = new Set<number>([0, 5, 6, 7, 8, 9]);
+export const REDRAWN_POSE_KINDS: ReadonlySet<string> = new Set(["ankle", "card", "celebration", "double", "goal", "goalmiss", "huddle", "intercept", "lastditch", "pass"]);
+
+/**
  * Game hairstyle (Look.portrait, see league/look.ts HAIR) to the lab's hairstyle number:
  * 0 original braided ponytail, 1 braided bun, 2 natural puff, 3 sports hijab, 4 bob cut,
  * 5 curly afro, 6 tapered natural crop, 7 twin Dutch braids, 8 tied-back locs,

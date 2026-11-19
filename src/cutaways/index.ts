@@ -2,7 +2,7 @@ import { h } from "../dom";
 import type { Look, MatchEvent, Player, Team } from "../engine/types";
 import { BUILDS, lookOf } from "../league/look";
 import { rand } from "../viewer/scenes";
-import { BEFORE, CHANCE, FREQUENCIES, LAB_HAIR, TRANSITIONS, VERSIONS, type Frequency, type Kind, type Transition } from "./data";
+import { ALTERNATE_POSE_HAIR, BEFORE, CHANCE, FREQUENCIES, LAB_HAIR, REDRAWN_POSE_KINDS, TRANSITIONS, VERSIONS, type Frequency, type Kind, type Transition } from "./data";
 import { CANVAS_SIZE, cutawayLength, drawFrame, prepare, snapshotField, type Athlete, type CutawayRequest } from "./render";
 
 /**
@@ -172,7 +172,12 @@ export class Cutaways {
     const lb = b && lookOf(b, home.gender);
     // A card shows the referee on the left; she is nobody in particular.
     const second = lb ? athlete(lb) : kind === "card" ? { hair: Math.floor(rand(ev, 44) * 5), build: 1 } : undefined;
-    return { kind, a: athlete(la), b: second, pose: VERSIONS[kind as keyof typeof VERSIONS] ? Math.floor(rand(ev, 45) * VERSIONS[kind as keyof typeof VERSIONS]!) : undefined, mode: this.settings.mode, shake: kind === "injury" ? false : this.settings.shake };
+    const versions = VERSIONS[kind as keyof typeof VERSIONS];
+    let pose = versions ? Math.floor(rand(ev, 45) * versions) : undefined;
+    // The referee in a card is never overlaid, so only the carded player's hairstyle matters there.
+    const shown = kind === "card" || !second ? [athlete(la)] : [athlete(la), second];
+    if (pose && REDRAWN_POSE_KINDS.has(kind) && !shown.every((p) => ALTERNATE_POSE_HAIR.has(p.hair))) pose = 0;
+    return { kind, a: athlete(la), b: second, pose, mode: this.settings.mode, shake: kind === "injury" ? false : this.settings.shake };
   }
 
   /** Plays the cutaway for an event, if there is one. Resolves when it has finished, or at once if there is none. */
