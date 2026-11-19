@@ -6,6 +6,13 @@ drift apart). It is shown in the app footer and on the new-game screen.
 
 ## Unreleased
 
+- Followed players now have stories against other clubs. The chronicle records the first meeting with the club that
+  introduced them (whether it passed on them or they left it), with the score and whether they scored. Across a
+  career it also notices scoring runs against a club, long droughts (only for players who score elsewhere), unbeaten
+  runs and runs of defeats, scoring duels and one-sided contests with a player from another club, matches where both
+  were carded, and a season finishing top of, or just behind, the league's scoring charts. A pattern is told again
+  only after it has grown by a few meetings, and a season adds at most three of these lines. The History tab splits
+  "Alongside" into Teammates and Opponents.
 - Story moments for followed players. The match engine now records who scored each try and who carried in the phase
   before (a try assist, or the kicker on a grubber or chip), and late goal-line defence by a side narrowly ahead.
   When a season closes, the History tab's chronicle can add up to one deciding moment (the try or kick that won a

@@ -1,7 +1,7 @@
 import { hashSeed, Rng } from "../engine/rng";
 import type { Player, Role, Team } from "../engine/types";
 import { makeProspects, overall } from "./teams";
-import { STORY_KEYS, closeLedger, type Ledger } from "./moments";
+import { STORY_KEYS, closeLedger, pruneVs, vsCandidates, type Candidate, type Ledger, type VsRecord } from "./moments";
 import { SHORT, storyText, type WordKey } from "./wording";
 
 /**
@@ -26,6 +26,8 @@ export interface ChronicleEntry {
   vsId?: string;
   score?: string;
   minute?: number;
+  /** First meeting with the origin club: "passed" if it never signed them, "left" if they were once on its books. */
+  detail?: string;
 }
 
 /** One season on a roster. The optional fields are absent on seasons recorded by older saves. */
@@ -65,6 +67,8 @@ export interface EraProspect {
   announced?: boolean;
   /** What the season in progress has shown about them. Turned into chronicle entries when the season closes. */
   ledger?: Ledger;
+  /** How they have fared against other clubs and their players, over the whole career. */
+  vs?: VsRecord;
   /** The retirement entry, kept for the profile. */
   summary?: string;
   /** Sparse permanent facts. Text is built from these when shown. */
@@ -182,26 +186,43 @@ export function chronicleItems(r: EraProspect, nameOf: (clubId: string) => strin
       case "first-regular-season": return `First regular season at ${club}`;
       case "title": return `${club} won the league, with ${c.value} ${c.value === 1 ? "appearance" : "appearances"} from them`;
       case "retired": return c.value ? `Retired, aged ${c.value}` : "Retired";
-      default: return storyText(c.key, { name: r.name, club, other: c.otherName, vs: c.vsId ? nameOf(c.vsId) : undefined, score: c.score, minute: c.minute, n: c.value, role: r.role, age: c.value }, r.id, c.season, c.otherId ?? c.vsId ?? "");
+      default: return storyText(c.key, { name: r.name, club, other: c.otherName, vs: c.vsId ? nameOf(c.vsId) : undefined, score: c.score, minute: c.minute, n: c.value, role: r.role, age: c.value, detail: c.detail }, r.id, c.season, c.otherId ?? c.vsId ?? "");
     }
   };
   return [...r.chronicle].sort((a, b) => a.season - b.season).map((c) => ({ season: c.season, text: text(c), story: STORY_KEYS.has(c.key) }));
 }
 
-/** The other players in a career, with what the chronicle says about each. */
-export function alongside(r: EraProspect): { id: string; name: string; what: string[] }[] {
-  const out = new Map<string, { id: string; name: string; what: string[] }>();
+/** The other players in a career, with what the chronicle says about each. Opponents carry their club. */
+export function alongside(r: EraProspect, nameOf?: (clubId: string) => string): { id: string; name: string; club?: string; what: string[] }[] {
+  const out = new Map<string, { id: string; name: string; club?: string; what: string[] }>();
   for (const c of r.chronicle) {
     if (!c.otherId || !c.otherName || !(c.key in SHORT)) continue;
-    const e = out.get(c.otherId) ?? { id: c.otherId, name: c.otherName, what: [] };
+    const e = out.get(c.otherId) ?? { id: c.otherId, name: c.otherName, club: c.vsId && nameOf ? nameOf(c.vsId) : undefined, what: [] };
     e.what.push(`${SHORT[c.key as keyof typeof SHORT]} (S${c.season})`);
     out.set(c.otherId, e);
   }
   return [...out.values()];
 }
 
-/** Closes the season's ledger into the chronicle. */
-export function closeEraLedger(r: EraProspect) {
-  r.chronicle.push(...closeLedger(r.ledger, r.chronicle));
+/** A season's scoring table: the followed player's place in it, as a candidate line. */
+export function raceCandidate(r: EraProspect, season: number, clubId: string, table: { id: string; name: string; clubId: string; points: number }[]): Candidate | null {
+  const sorted = [...table].filter((x) => x.points > 0).sort((a, b) => b.points - a.points);
+  const at = sorted.findIndex((x) => x.id === r.id);
+  if (at < 0 || at > 1) return null;
+  const me = sorted[at];
+  if (at === 0) {
+    const next = sorted[1];
+    return next ? { entry: { season, key: "top-scorer", clubId, vsId: next.clubId, otherId: next.id, otherName: next.name, value: me.points - next.points }, strength: 3 } : null;
+  }
+  const top = sorted[0];
+  const gap = top.points - me.points;
+  return gap <= 12 ? { entry: { season, key: "runner-up-scorer", clubId, vsId: top.clubId, otherId: top.id, otherName: top.name, value: gap }, strength: 1 + (12 - gap) / 12 } : null;
+}
+
+/** Closes the season into the chronicle: the ledger's moments and pairs, and what the career record now says about clubs and rivals. */
+export function closeEraLedger(r: EraProspect, season: number, clubId: string, race?: Candidate | null) {
+  const signed = r.chronicle.some((c) => c.key === "joined" && c.clubId === r.originClubId);
+  r.chronicle.push(...closeLedger(r.ledger, r.chronicle, [...vsCandidates(r.vs, season, clubId), ...(race ? [race] : [])], { signed }));
+  pruneVs(r.vs, season);
   delete r.ledger;
 }

@@ -1,6 +1,6 @@
 import type { MatchEvent, MatchLog } from "../engine/types";
 import type { ChronicleEntry } from "./era";
-import { PAIR_MIN } from "./wording";
+import { PAIR_MIN, VS_MIN } from "./wording";
 
 /**
  * Story moments for followed players. Detectors read finished match logs and notice patterns; nothing here touches
@@ -40,17 +40,49 @@ export interface Ledger {
   own: string;
   mates: Record<string, Tally>;
   moments: Moment[];
+  /** The first time they played the club that introduced them, if that happened this season. */
+  meeting?: { vsId: string; score: string; tries: number; matchday: number };
+}
+
+/** How a followed player has fared against one club, over a career. */
+export interface ClubTally {
+  /** Matches they played against this club. */
+  meetings: number;
+  /** Matches in which they scored a try. */
+  scored: number;
+  /** Straight meetings with a try, meetings since the last try, straight meetings without defeat, straight defeats. */
+  run: number;
+  dry: number;
+  unbeaten: number;
+  losing: number;
+  /** The count last written to the chronicle for each pattern, so a streak is not told twice. */
+  said?: Partial<Record<"run" | "dry" | "unbeaten" | "losing", number>>;
+}
+
+/** How a followed player has fared against one opposing player, in matches where that player scored or was carded. */
+export interface FoeTally {
+  name: string;
+  clubId: string;
+  /** Matches in which both scored, only the opponent scored, and both were carded. */
+  both: number;
+  foeOnly: number;
+  clash: number;
+  /** Last season seen, so old foes can be forgotten. */
+  last: number;
+  said?: Partial<Record<"duel" | "nemesis" | "clash", number>>;
+}
+
+export interface VsRecord {
+  clubs: Record<string, ClubTally>;
+  foes: Record<string, FoeTally>;
 }
 
 /** Largest final margin for a match to count as decided by one moment: a try and a conversion, plus a point of slack. */
 export const DECIDED_MARGIN = 7;
 /** Moments kept in a ledger while the season runs. */
 const KEEP_MOMENTS = 3;
-/** Most pair lines and single-moment lines a season can add to the chronicle. */
-export const MAX_PAIR_LINES = 2;
-export const MAX_MOMENT_LINES = 1;
 /** Story lines a whole career can hold, so a long career stays readable. */
-export const MAX_STORY_LINES = 10;
+export const MAX_STORY_LINES = 14;
 
 const SCORING = new Set(["try", "conversion", "penalty-goal", "drop-goal"]);
 
@@ -97,7 +129,7 @@ export function momentsIn(log: MatchLog, playerId: string, clubId: string): Mome
 export const salience = (m: Moment) => 8 - m.margin + (m.minute >= 38 ? 3 : m.minute >= 33 ? 1 : 0) + (m.key === "stand" ? 0 : 1);
 
 /** Adds one matchday's logs to a followed player's ledger. Does nothing for matches their club did not play. */
-export function recordMatches(ledger: Ledger | undefined, playerId: string, clubId: string, season: number, logs: MatchLog[]): Ledger {
+export function recordMatches(ledger: Ledger | undefined, playerId: string, clubId: string, season: number, logs: MatchLog[], origin?: { clubId: string; met: boolean }): Ledger {
   let l = ledger;
   if (!l || l.season !== season || l.clubId !== clubId) l = { season, clubId, played: 0, own: "", mates: {}, moments: [] };
   for (const log of logs) {
@@ -124,6 +156,12 @@ export function recordMatches(ledger: Ledger | undefined, playerId: string, club
       else if (e.pid === playerId && e.assist !== playerId) ensure(e.assist).got++;
     }
     l.played++;
+    // The first match against the club that introduced them, once they have left it.
+    const vs = side === 0 ? log.awayId : log.homeId;
+    const line = (log.players ?? []).find((p) => p.id === playerId);
+    if (origin && !origin.met && !l.meeting && line && vs === origin.clubId && clubId !== origin.clubId) {
+      l.meeting = { vsId: vs, score: `${side === 0 ? log.homeScore : log.awayScore}-${side === 0 ? log.awayScore : log.homeScore}`, tries: line.tries, matchday: log.matchday };
+    }
     for (const m of momentsIn(log, playerId, clubId)) l.moments = [...l.moments, m].sort((a, b) => salience(b) - salience(a)).slice(0, KEEP_MOMENTS);
   }
   return l;
@@ -160,28 +198,119 @@ export function longestTurns(own: string, mate: string, played: number): number 
   return best;
 }
 
-interface Candidate {
-  entry: ChronicleEntry;
-  strength: number;
+/** Adds matches to the career-long record against other clubs and their players. Only matches the player played count. */
+export function recordVs(vs: VsRecord | undefined, playerId: string, clubId: string, season: number, logs: MatchLog[]): VsRecord {
+  const rec: VsRecord = vs ?? { clubs: {}, foes: {} };
+  for (const log of logs) {
+    if (log.homeId !== clubId && log.awayId !== clubId) continue;
+    const line = (log.players ?? []).find((p) => p.id === playerId);
+    if (!line) continue;
+    const side: 0 | 1 = log.homeId === clubId ? 0 : 1;
+    const vsId = side === 0 ? log.awayId : log.homeId;
+    const mine = side === 0 ? log.homeScore : log.awayScore;
+    const theirs = side === 0 ? log.awayScore : log.homeScore;
+    const c = (rec.clubs[vsId] ??= { meetings: 0, scored: 0, run: 0, dry: 0, unbeaten: 0, losing: 0 });
+    c.meetings++;
+    if (line.tries > 0) {
+      c.scored++;
+      c.run++;
+      c.dry = 0;
+    } else {
+      c.run = 0;
+      c.dry++;
+    }
+    c.unbeaten = mine >= theirs ? c.unbeaten + 1 : 0;
+    c.losing = mine < theirs ? c.losing + 1 : 0;
+    const carded = line.yellows + line.reds > 0;
+    for (const o of log.players ?? []) {
+      if (o.team === side) continue;
+      const scored = o.tries > 0;
+      const oCarded = o.yellows + o.reds > 0;
+      if (!scored && !(carded && oCarded)) continue;
+      const f = (rec.foes[o.id] ??= { name: o.name, clubId: vsId, both: 0, foeOnly: 0, clash: 0, last: season });
+      f.clubId = vsId;
+      f.last = season;
+      if (scored) {
+        if (line.tries > 0) f.both++;
+        else f.foeOnly++;
+      }
+      if (carded && oCarded) f.clash++;
+    }
+  }
+  return rec;
 }
 
+/** Forgets opposing players not seen for a few seasons and met only once or twice. */
+export function pruneVs(vs: VsRecord | undefined, season: number) {
+  if (!vs) return;
+  for (const [id, f] of Object.entries(vs.foes)) if (f.last < season - 4 && f.both + f.foeOnly + f.clash < 3) delete vs.foes[id];
+}
+
+export interface Candidate {
+  entry: ChronicleEntry;
+  strength: number;
+  /** Run once the candidate is written, to remember what has been said. */
+  commit?: () => void;
+}
+
+/** The count at which a pattern is next worth saying: its minimum the first time, then a few more than last said. */
+const nextAt = (said: number | undefined, min: number, step: number) => (said ? said + step : min);
+
+/** Patterns against clubs and their players that have grown past what the chronicle last said. */
+export function vsCandidates(vs: VsRecord | undefined, season: number, clubId: string): Candidate[] {
+  const out: Candidate[] = [];
+  if (!vs) return out;
+  for (const [id, c] of Object.entries(vs.clubs)) {
+    const said = (c.said ??= {});
+    const counts = { run: c.run, dry: c.dry, unbeaten: c.unbeaten, losing: c.losing } as const;
+    const keys = { run: "scoring-run", dry: "drought", unbeaten: "unbeaten", losing: "losing" } as const;
+    // A drought only counts for someone who scores elsewhere; a Sweeper not scoring against a club is not news.
+    const others = Object.entries(vs.clubs).filter(([k]) => k !== id).reduce((t, [, o]) => ({ m: t.m + o.meetings, s: t.s + o.scored }), { m: 0, s: 0 });
+    const scorer = others.m >= 6 && others.s / others.m >= 0.35;
+    for (const k of ["run", "dry", "unbeaten", "losing"] as const) {
+      const n = counts[k];
+      if (n < VS_MIN[k] || (k === "dry" && !scorer)) {
+        delete said[k];
+        continue;
+      }
+      if (n < nextAt(said[k], VS_MIN[k], 3)) continue;
+      out.push({ entry: { season, key: keys[k], clubId, vsId: id, value: n }, strength: n / VS_MIN[k], commit: () => void (said[k] = n) });
+    }
+  }
+  for (const [id, f] of Object.entries(vs.foes)) {
+    const said = (f.said ??= {});
+    const counts = { duel: f.both, nemesis: f.foeOnly, clash: f.clash } as const;
+    for (const k of ["duel", "nemesis", "clash"] as const) {
+      const n = counts[k];
+      if (n < nextAt(said[k], VS_MIN[k], k === "clash" ? 2 : 3) || (k === "nemesis" && f.foeOnly <= 2 * f.both)) continue;
+      out.push({ entry: { season, key: k, clubId, vsId: f.clubId, otherId: id, otherName: f.name, value: n }, strength: n / VS_MIN[k], commit: () => void (said[k] = n) });
+    }
+  }
+  return out;
+}
+
+/** Most lines a season adds beyond the single deciding moment: pairs, rivalries and club patterns compete for them. */
+export const MAX_SEASON_EXTRAS = 3;
+
 /**
- * What the season shows, as chronicle entries: the best single moment and the strongest pair patterns, each pair
- * only once. Most seasons return nothing.
+ * What the season shows, as chronicle entries: the best single moment, then the strongest of the teammate patterns,
+ * rivalries and club patterns (`extras`), each pair only once. The first meeting with the origin club always counts.
+ * Most seasons return little.
  */
-export function closeLedger(l: Ledger | undefined, existing: ChronicleEntry[]): ChronicleEntry[] {
-  if (!l) return [];
-  const room = MAX_STORY_LINES - existing.filter((c) => STORY_KEYS.has(c.key)).length;
-  if (room <= 0) return [];
+export function closeLedger(l: Ledger | undefined, existing: ChronicleEntry[], extras: Candidate[] = [], origin?: { signed: boolean }): ChronicleEntry[] {
   const out: ChronicleEntry[] = [];
-  const best = l.moments[0];
-  if (best) out.push({ season: l.season, key: best.key, clubId: l.clubId, vsId: best.vsId, score: best.score, minute: best.minute, value: best.margin });
-  const pairs: Candidate[] = [];
-  for (const [id, t] of Object.entries(l.mates)) {
-    const seq = t.seq.padEnd(l.played, "-");
-    const base = { season: l.season, clubId: l.clubId, otherId: id, otherName: t.name };
-    const together = [...Array(l.played).keys()].filter((i) => l.own[i] === "f" && seq[i] === "m").length;
-    const turns = longestTurns(l.own, seq, l.played);
+  if (l?.meeting) out.push({ season: l.season, key: "first-meeting", clubId: l.clubId, vsId: l.meeting.vsId, score: l.meeting.score, value: l.meeting.tries, detail: origin?.signed ? "left" : "passed" });
+  const room = MAX_STORY_LINES - existing.filter((c) => STORY_KEYS.has(c.key)).length;
+  if (room <= 0 || (!l && !extras.length)) return out;
+  const picked: ChronicleEntry[] = [];
+  const best = l?.moments[0];
+  if (l && best) picked.push({ season: l.season, key: best.key, clubId: l.clubId, vsId: best.vsId, score: best.score, minute: best.minute, value: best.margin });
+  const pool: Candidate[] = [...extras];
+  for (const [id, t] of Object.entries(l?.mates ?? {})) {
+    const seq = t.seq.padEnd(l!.played, "-");
+    const base = { season: l!.season, clubId: l!.clubId, otherId: id, otherName: t.name };
+    const together = [...Array(l!.played).keys()].filter((i) => l!.own[i] === "f" && seq[i] === "m").length;
+    const turns = longestTurns(l!.own, seq, l!.played);
     const options = ([
       { entry: { ...base, key: "supplier", value: t.gave }, strength: t.gave / PAIR_MIN.supplier },
       { entry: { ...base, key: "finisher", value: t.got }, strength: t.got / PAIR_MIN.finisher },
@@ -189,11 +318,14 @@ export function closeLedger(l: Ledger | undefined, existing: ChronicleEntry[]): 
       { entry: { ...base, key: "together", value: together }, strength: together / PAIR_MIN.together },
     ] as Candidate[]).filter((o) => o.strength >= 1);
     options.sort((a, b) => b.strength - a.strength);
-    if (options[0]) pairs.push(options[0]);
+    if (options[0]) pool.push(options[0]);
   }
-  pairs.sort((a, b) => b.strength - a.strength);
-  out.push(...pairs.slice(0, MAX_PAIR_LINES).map((p) => p.entry));
-  return out.slice(0, room);
+  pool.sort((a, b) => b.strength - a.strength);
+  const chosen = pool.slice(0, MAX_SEASON_EXTRAS);
+  for (const c of chosen) c.commit?.();
+  picked.push(...chosen.map((c) => c.entry));
+  out.push(...picked.slice(0, room));
+  return out;
 }
 
-export const STORY_KEYS = new Set<string>(["winning-try", "winning-kick", "stand", "supplier", "finisher", "alternating", "together", "replaced"]);
+export const STORY_KEYS = new Set<string>(["winning-try", "winning-kick", "stand", "supplier", "finisher", "alternating", "together", "replaced", "first-meeting", "scoring-run", "drought", "unbeaten", "losing", "duel", "nemesis", "clash", "top-scorer", "runner-up-scorer"]);

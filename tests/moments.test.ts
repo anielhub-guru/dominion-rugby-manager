@@ -3,8 +3,8 @@ import { simulateMatch } from "../src/engine/match";
 import { hashSeed } from "../src/engine/rng";
 import type { MatchEvent, MatchLog } from "../src/engine/types";
 import { generateTeams } from "../src/league/teams";
-import { closeLedger, decidingScore, longestTurns, momentsIn, recordMatches, type Ledger } from "../src/league/moments";
-import { alongside, chronicleLines, newEraProspect } from "../src/league/era";
+import { MAX_STORY_LINES, STORY_KEYS, closeLedger, decidingScore, longestTurns, momentsIn, pruneVs, recordMatches, recordVs, vsCandidates, type Ledger } from "../src/league/moments";
+import { alongside, chronicleLines, newEraProspect, raceCandidate } from "../src/league/era";
 import { storyText } from "../src/league/wording";
 import { autoPlan, completeOffseason, isSeasonOver, newGame, playMatchday, startNextSeason, teamById, type OffseasonPlan, type SeasonState } from "../src/league/season";
 import { overall } from "../src/league/teams";
@@ -97,6 +97,65 @@ describe("pair patterns", () => {
   });
 });
 
+const line = (id: string, team: 0 | 1, tries: number, cards = 0) => ({ id, name: id.toUpperCase(), team, tries, yellows: cards, reds: 0 }) as never;
+const meet = (home: string, away: string, hs: number, as: number, players: unknown[], matchday = 1) => log([], hs, as, { homeId: home, awayId: away, players: players as never, matchday });
+
+describe("against other clubs and players", () => {
+  it("notes the first meeting with the origin club only once they have left it and played", () => {
+    const origin = { clubId: "O", met: false };
+    const away = meet("X", "O", 21, 24, [line("f", 0, 1), line("o1", 1, 2)]);
+    const l = recordMatches(undefined, "f", "X", 3, [meet("X", "Y", 5, 0, [line("f", 0, 0)]), away], origin);
+    expect(l.meeting).toEqual({ vsId: "O", score: "21-24", tries: 1, matchday: 1 });
+    const out = closeLedger(l, [], [], { signed: false });
+    expect(out[0]).toMatchObject({ key: "first-meeting", vsId: "O", score: "21-24", value: 1, detail: "passed" });
+    expect(recordMatches(undefined, "f", "X", 3, [away], { clubId: "O", met: true }).meeting).toBeUndefined();
+    expect(recordMatches(undefined, "f", "O", 3, [meet("O", "X", 5, 0, [line("f", 0, 0)])], origin).meeting).toBeUndefined(); // still at the origin club
+    expect(recordMatches(undefined, "f", "X", 3, [meet("X", "O", 5, 0, [line("q", 0, 0)])], origin).meeting).toBeUndefined(); // did not play
+    const text = chronicleLines({ ...newEraProspect({ id: "f", name: "Hauwa", role: "Winger", age: 17 } as never, "O", 2), chronicle: out }, (id) => `Club ${id}`).join(" ");
+    expect(text).toContain("Club O");
+    expect(text).toContain("21-24");
+  });
+
+  it("tracks club streaks, and duels, nemeses and clashes with opposing players", () => {
+    let vs;
+    // Against O: f scores in each of six meetings; o1 scores in all six (a duel); o2 scores when f does not.
+    for (let i = 0; i < 6; i++) vs = recordVs(vs, "f", "X", 3, [meet("X", "O", 10, 7, [line("f", 0, 1, 1), line("o1", 1, 1, 1)])]);
+    for (let i = 0; i < 5; i++) vs = recordVs(vs, "f", "X", 3, [meet("X", "P", 0, 9, [line("f", 0, 0), line("o2", 1, 1)])]);
+    expect(vs!.clubs.O).toMatchObject({ meetings: 6, scored: 6, run: 6, unbeaten: 6, losing: 0 });
+    expect(vs!.clubs.P).toMatchObject({ meetings: 5, scored: 0, dry: 5, losing: 5 });
+    expect(vs!.foes.o1).toMatchObject({ both: 6, foeOnly: 0, clash: 6 });
+    expect(vs!.foes.o2).toMatchObject({ both: 0, foeOnly: 5 });
+    const keys = vsCandidates(vs, 3, "X").map((c) => c.entry.key).sort();
+    expect(keys).toEqual(["clash", "drought", "duel", "losing", "nemesis", "scoring-run", "unbeaten"]);
+    // Once told they are not told again until the streak grows.
+    for (const c of vsCandidates(vs, 3, "X")) c.commit!();
+    expect(vsCandidates(vs, 4, "X")).toEqual([]);
+    vs = recordVs(vs, "f", "X", 4, [meet("X", "O", 10, 7, [line("f", 0, 1)])]);
+    expect(vsCandidates(vs, 4, "X")).toEqual([]); // one more meeting is not news
+    for (let i = 0; i < 2; i++) vs = recordVs(vs, "f", "X", 4, [meet("X", "O", 10, 7, [line("f", 0, 1)])]);
+    expect(vsCandidates(vs, 4, "X").map((c) => c.entry.key).sort()).toEqual(["scoring-run", "unbeaten"]);
+  });
+
+  it("limits a season to a few lines and forgets old one-off foes", () => {
+    let vs;
+    for (let i = 0; i < 6; i++) vs = recordVs(vs, "f", "X", 3, [meet("X", "O", 10, 7, [line("f", 0, 1, 1), line("o1", 1, 1, 1)])]);
+    for (let i = 0; i < 5; i++) vs = recordVs(vs, "f", "X", 3, [meet("X", "P", 0, 9, [line("f", 0, 0), line("o2", 1, 1)])]);
+    expect(closeLedger(undefined, [], vsCandidates(vs, 3, "X")).length).toBe(3);
+    const lone = recordVs(undefined, "f", "X", 1, [meet("X", "O", 5, 0, [line("f", 0, 0), line("z", 1, 1)])]);
+    pruneVs(lone, 9);
+    expect(lone.foes.z).toBeUndefined();
+  });
+
+  it("puts a player in the scoring race only when they are first, or close behind", () => {
+    const r = newEraProspect({ id: "f", name: "Hauwa", role: "Winger", age: 17 } as never, "O", 2);
+    const t = (f: number) => [{ id: "f", name: "Hauwa", clubId: "X", points: f }, { id: "a", name: "Ada", clubId: "Y", points: 40 }, { id: "b", name: "Bee", clubId: "Z", points: 20 }];
+    expect(raceCandidate(r, 3, "X", t(52))!.entry).toMatchObject({ key: "top-scorer", otherName: "Ada", vsId: "Y", value: 12 });
+    expect(raceCandidate(r, 3, "X", t(35))!.entry).toMatchObject({ key: "runner-up-scorer", otherName: "Ada", value: 5 });
+    expect(raceCandidate(r, 3, "X", t(10))).toBeNull();
+    expect(raceCandidate(r, 3, "X", t(0))).toBeNull();
+  });
+});
+
 describe("wording", () => {
   const w = { name: "Hauwa Salisu", club: "Kano Ironclads", other: "Ada Idowu", vs: "Abuja Wardens", score: "24-21", minute: 39, n: 5, role: "Winger", age: 33 };
   it("is stable for an entry, varies between entries, and always carries the facts", () => {
@@ -112,6 +171,15 @@ describe("wording", () => {
     for (const k of ["supplier", "finisher", "alternating", "together"] as const) expect(storyText(k, w, "id", 2)).toContain("Ada Idowu");
     expect(storyText("replaced", w, "id", 1)).toContain("33");
     expect(storyText("winning-try", { ...w, minute: 40 }, "id", 1)).toContain("last minute");
+    for (const k of ["scoring-run", "drought", "unbeaten", "losing"] as const) expect(storyText(k, w, "id", 2)).toContain("Abuja Wardens");
+    for (const k of ["duel", "nemesis", "clash", "top-scorer", "runner-up-scorer"] as const) {
+      const t = storyText(k, w, "id", 2);
+      expect(t).toContain("Ada Idowu");
+      expect(t).toContain("Abuja Wardens");
+    }
+    for (const detail of ["passed", "left"]) for (const score of ["24-21", "10-10", "3-9"]) for (const n of [0, 2]) expect(storyText("first-meeting", { ...w, detail, score, n }, "id", 5)).toContain(score);
+    const all = [3, 5, 8].flatMap((n) => Array.from({ length: 60 }, (_, i) => ["clash", "duel", "nemesis"].map((k) => storyText(k as never, { ...w, n }, "id", i)).join(" "))).join(" ");
+    expect(all).not.toMatch(/bad blood|hate|feud/i);
   });
 
   it("builds chronicle lines and an alongside list from entries", () => {
@@ -151,10 +219,11 @@ describe("over a long game", () => {
     let seasons = 0, story = 0;
     for (const e of s.eraProspects ?? []) {
       seasons += e.seasons.length;
-      story += e.chronicle.filter((c) => ["winning-try", "winning-kick", "stand", "supplier", "finisher", "alternating", "together"].includes(c.key)).length;
-      expect(e.chronicle.filter((c) => c.otherId || c.vsId).length).toBeLessThanOrEqual(12);
+      const lines = e.chronicle.filter((c) => STORY_KEYS.has(c.key) && c.key !== "replaced" && c.key !== "first-meeting").length;
+      story += lines;
+      expect(lines).toBeLessThanOrEqual(MAX_STORY_LINES);
     }
     console.log(`story lines ${story} over ${seasons} followed seasons`);
-    expect(story).toBeLessThanOrEqual(seasons * 1.5);
+    expect(story).toBeLessThanOrEqual(seasons * 2);
   }, 60000);
 });

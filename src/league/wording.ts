@@ -16,6 +16,8 @@ export interface Words {
   n?: number;
   role?: string;
   age?: number;
+  /** First meeting: "passed" if the origin club never signed them, "left" if they were once on its books. */
+  detail?: string;
 }
 
 const pick = <T,>(bank: readonly T[], ...seed: (string | number)[]): T => bank[Math.floor((hashSeed(...seed) / 4294967296) * bank.length)];
@@ -83,15 +85,58 @@ const LABELS = {
     ["a scoring partnership", "double trouble for defences", "a pair who scored as one", "a shared habit"],
     ["a scoring partnership in full flow", "the pair every defence planned for", "two players on the same errand"],
   ],
+  duel: [
+    ["a budding rivalry", "a personal duel", "tries for tries", "a contest within the contest"],
+    ["a real rivalry", "a running battle", "a duel the league noticed", "old foes"],
+    ["a fully fledged rivalry", "a rivalry with history", "a rivalry told in tries"],
+  ],
+  nemesis: [
+    ["a thorn in their side", "someone who keeps finding the answer", "an awkward opponent", "a nemesis in the making"],
+    ["a nemesis", "a mismatch of fortunes", "an opponent who has their number", "a recurring problem"],
+    ["a fully fledged nemesis", "someone who owns the fixture", "a problem with no answer yet"],
+  ],
+  clash: [
+    ["some spark", "a spirited fixture", "an edge to the contest", "plenty of fire"],
+    ["a fiercely fought duel", "neither giving an inch", "a fixture with fire", "a keenly contested rivalry"],
+    ["a duel the league looks out for", "a rivalry with real fire", "two players who give no quarter"],
+  ],
+  run: [
+    ["a happy hunting ground", "a habit forming", "a fixture they like", "a good record to carry in"],
+    ["a happy hunting ground", "a run to protect", "a side that cannot keep them out", "a favourite opponent"],
+    ["a fixture they own", "a hunting ground in full", "a run the other side dreads"],
+  ],
+  dry: [
+    ["a bogey side", "a stubborn opponent", "unfinished business", "a wall to get past"],
+    ["a bogey side", "a wall they cannot get past", "unfinished business", "a fixture with a stubborn streak"],
+    ["a bogey side in full", "a fixture that will not give", "a drought the whole club has noticed"],
+  ],
+  unbeaten: [
+    ["a good record to carry in", "a run to protect", "a happy fixture", "a settled order"],
+    ["a run to protect", "a fixture they own", "a streak with some weight"],
+    ["a streak with real weight", "an unbroken run", "a record worth defending"],
+  ],
+  losing: [
+    ["one to put right", "a bogey fixture", "a hoodoo", "a run to end"],
+    ["a hoodoo", "a bogey fixture", "a run that needs ending", "one to put right"],
+    ["a hoodoo in full", "a run that has become a story", "a fixture the club dreads"],
+  ],
+  race: [
+    ["a close race", "a race to the wire", "so close", "the margin of a single kick"],
+    ["a close race", "a race to the wire", "so close", "a few points the wrong way"],
+    ["a close race", "a race to the wire", "so close", "a few points the wrong way"],
+  ],
 } as const;
 
-type PairKey = keyof typeof LABELS;
+type LabelKey = keyof typeof LABELS;
+type PairKey = "supplier" | "finisher" | "alternating" | "together";
 
 const tier = (n: number, low: number) => (n >= low + 4 ? 2 : n >= low + 2 ? 1 : 0);
-const label = (key: PairKey, n: number, low: number, ...seed: (string | number)[]) => pick(LABELS[key][tier(n, low)], key, "label", ...seed);
+const label = (key: LabelKey, n: number, low: number, ...seed: (string | number)[]) => pick(LABELS[key][tier(n, low)], key, "label", ...seed);
 
 /** Count at which each pair pattern first counts. */
 export const PAIR_MIN: Record<PairKey, number> = { supplier: 3, finisher: 3, alternating: 5, together: 4 };
+/** Count at which each pattern against another club, or one of its players, first counts. */
+export const VS_MIN = { run: 3, dry: 5, unbeaten: 5, losing: 5, duel: 3, nemesis: 5, clash: 2 } as const;
 
 const SUPPLIER: ((w: Words, l: string) => string)[] = [
   (w, l) => `Set up ${w.n} tries for ${w.other} at ${w.club}: ${l}`,
@@ -127,7 +172,85 @@ const REPLACED: ((w: Words) => string)[] = [
   (w) => `${w.other} retired at ${w.age}; they became ${w.club}'s ${w.role}`,
 ];
 
-export type WordKey = "winning-try" | "winning-kick" | "stand" | PairKey | "replaced";
+const FIRST_INTRO: Record<string, ((w: Words) => string)[]> = {
+  passed: [
+    (w) => `Faced ${w.vs}, who did not sign them, for the first time`,
+    (w) => `Met ${w.vs}, the club that let them go, for the first time`,
+    (w) => `First meeting with ${w.vs}, where they began in the intake but never signed`,
+    (w) => `Lined up against ${w.vs}, who passed on them, for the first time`,
+  ],
+  left: [
+    (w) => `Faced ${w.vs}, the club they left, for the first time`,
+    (w) => `Returned to face ${w.vs}, their old club, for the first time`,
+    (w) => `First match against former club ${w.vs}`,
+    (w) => `Met ${w.vs}, where it began, for the first time as an opponent`,
+  ],
+};
+
+const FIRST_OUTCOME: Record<string, ((w: Words) => string)[]> = {
+  "win-scored": [(w) => `, scored, and won ${w.score}`, (w) => `: a try and a ${w.score} win`, (w) => `. They scored and ${w.club} won ${w.score}`],
+  "win-blank": [(w) => `, and ${w.club} won ${w.score} without a try from them`, (w) => `. ${w.club} won ${w.score}; they did not score`, (w) => `: a ${w.score} win, no try of their own`],
+  "loss-scored": [(w) => `, scored, but lost ${w.score}`, (w) => `: a try in a ${w.score} defeat`, (w) => `. They scored; ${w.club} lost ${w.score}`],
+  "loss-blank": [(w) => `, and lost ${w.score}`, (w) => `: a ${w.score} defeat, no try`, (w) => `. ${w.club} lost ${w.score} and they did not score`],
+  "draw-scored": [(w) => `, scored, and drew ${w.score}`, (w) => `: a try in a ${w.score} draw`],
+  "draw-blank": [(w) => `, and drew ${w.score}`, (w) => `: a ${w.score} draw, no try`],
+};
+
+const resultOf = (score = "0-0", tries = 0) => {
+  const [a, b] = score.split("-").map(Number);
+  return `${a > b ? "win" : a < b ? "loss" : "draw"}-${tries > 0 ? "scored" : "blank"}`;
+};
+
+type VsLine = (w: Words, l: string) => string;
+const RUN: VsLine[] = [
+  (w, l) => `Scored against ${w.vs} in ${w.n} straight meetings: ${l}`,
+  (w, l) => `Found the line against ${w.vs} ${w.n} meetings running, ${l}`,
+  (w, l) => `${w.vs} could not keep them out for ${w.n} meetings in a row. ${cap(l)}`,
+];
+const DRY: VsLine[] = [
+  (w, l) => `No try against ${w.vs} in ${w.n} meetings: ${l}`,
+  (w, l) => `${w.vs} have kept them try-less for ${w.n} meetings, ${l}`,
+  (w, l) => `Still looking for a try against ${w.vs}, ${w.n} meetings on. ${cap(l)}`,
+];
+const UNBEATEN: VsLine[] = [
+  (w, l) => `Unbeaten in ${w.n} meetings with ${w.vs}: ${l}`,
+  (w, l) => `${w.n} meetings with ${w.vs} and no defeat, ${l}`,
+  (w, l) => `${w.vs} have not beaten their side in ${w.n} meetings. ${cap(l)}`,
+];
+const LOSING: VsLine[] = [
+  (w, l) => `Beaten in ${w.n} straight meetings with ${w.vs}: ${l}`,
+  (w, l) => `${w.vs} have won ${w.n} meetings in a row against their side, ${l}`,
+  (w, l) => `No win over ${w.vs} in ${w.n} meetings. ${cap(l)}`,
+];
+const DUEL: VsLine[] = [
+  (w, l) => `Both scored against each other (${w.other}, ${w.vs}) in ${w.n} matches: ${l}`,
+  (w, l) => `Traded tries with ${w.other} of ${w.vs} in ${w.n} matches, ${l}`,
+  (w, l) => `${w.n} matches in which they and ${w.other} (${w.vs}) both crossed. ${cap(l)}`,
+];
+const NEMESIS: VsLine[] = [
+  (w, l) => `${w.other} of ${w.vs} scored against them in ${w.n} matches in which they did not: ${l}`,
+  (w, l) => `${w.other} (${w.vs}) found the line ${w.n} times when they could not, ${l}`,
+  (w, l) => `Every time ${w.other} of ${w.vs} scored against them (${w.n} matches), they went without. ${cap(l)}`,
+];
+const CLASH: VsLine[] = [
+  (w, l) => `Both carded in ${w.n} matches against ${w.other} of ${w.vs}: ${l}`,
+  (w, l) => `${w.n} matches with ${w.other} (${w.vs}) ended in cards for both: ${l}`,
+  (w, l) => `Cards for them and for ${w.other} of ${w.vs}, in ${w.n} matches. ${cap(l)}`,
+];
+const TOP: ((w: Words) => string)[] = [
+  (w) => `Finished as the league's top scorer, ${w.n} points clear of ${w.other} (${w.vs})`,
+  (w) => `Led the scoring charts, ${w.n} ahead of ${w.other} of ${w.vs}`,
+  (w) => `Top of the scoring table with ${w.other} (${w.vs}) ${w.n} points behind`,
+];
+const RUNNER: VsLine[] = [
+  (w, l) => `Second in the scoring charts, ${w.n} points behind ${w.other} (${w.vs}): ${l}`,
+  (w, l) => `${w.other} of ${w.vs} took the scoring title by ${w.n} points: ${l}`,
+  (w, l) => `Ran ${w.other} (${w.vs}) close for the scoring title, ${w.n} points short. ${cap(l)}`,
+];
+
+export type WordKey =
+  | "winning-try" | "winning-kick" | "stand" | PairKey | "replaced"
+  | "first-meeting" | "scoring-run" | "drought" | "unbeaten" | "losing" | "duel" | "nemesis" | "clash" | "top-scorer" | "runner-up-scorer";
 
 /** The line for one story entry. The seed parts keep the choice stable for that entry. */
 export function storyText(key: WordKey, w: Words, ...seed: (string | number)[]): string {
@@ -141,11 +264,29 @@ export function storyText(key: WordKey, w: Words, ...seed: (string | number)[]):
     case "alternating": return pick(ALTERNATING, key, ...seed)(w, label(key, w.n ?? 0, PAIR_MIN[key], ...seed));
     case "together": return pick(TOGETHER, key, ...seed)(w, label(key, w.n ?? 0, PAIR_MIN[key], ...seed));
     case "replaced": return pick(REPLACED, key, ...seed)(w);
+    case "first-meeting": {
+      const intro = pick(FIRST_INTRO[w.detail === "left" ? "left" : "passed"], key, "intro", ...seed)(w);
+      return intro + pick(FIRST_OUTCOME[resultOf(w.score, w.n)], key, "outcome", ...seed)(w);
+    }
+    case "scoring-run": return pick(RUN, key, ...seed)(w, label("run", w.n ?? 0, VS_MIN.run, ...seed));
+    case "drought": return pick(DRY, key, ...seed)(w, label("dry", w.n ?? 0, VS_MIN.dry, ...seed));
+    case "unbeaten": return pick(UNBEATEN, key, ...seed)(w, label("unbeaten", w.n ?? 0, VS_MIN.unbeaten, ...seed));
+    case "losing": return pick(LOSING, key, ...seed)(w, label("losing", w.n ?? 0, VS_MIN.losing, ...seed));
+    case "duel": return pick(DUEL, key, ...seed)(w, label("duel", w.n ?? 0, VS_MIN.duel, ...seed));
+    case "nemesis": return pick(NEMESIS, key, ...seed)(w, label("nemesis", w.n ?? 0, VS_MIN.nemesis, ...seed));
+    case "clash": return pick(CLASH, key, ...seed)(w, label("clash", w.n ?? 0, VS_MIN.clash, ...seed));
+    case "top-scorer": return pick(TOP, key, ...seed)(w);
+    case "runner-up-scorer": return pick(RUNNER, key, ...seed)(w, label("race", w.n ?? 0, 0, ...seed));
   }
 }
 
 /** Short phrase for the "Alongside" list, said of the other player. */
-export const SHORT: Record<PairKey | "replaced", string> = {
+export const SHORT: Record<PairKey | "replaced" | "duel" | "nemesis" | "clash" | "top-scorer" | "runner-up-scorer", string> = {
+  duel: "scored against each other",
+  nemesis: "scored when they could not",
+  clash: "cards for both",
+  "top-scorer": "next in the scoring charts",
+  "runner-up-scorer": "took the scoring title",
   supplier: "tries set up for them",
   finisher: "tries set up by them",
   alternating: "traded tries",

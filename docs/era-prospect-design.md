@@ -174,3 +174,14 @@ patterns, ten story lines per career. Thresholds sit in `PAIR_MIN` (`wording.ts`
 Wording (`src/league/wording.ts`) is a bank of variants chosen by hash of career, season and the other player, so
 lines are stable. This relaxes the earlier "no labels" rule on purpose: relationship colour words ("a friendly
 rivalry", "a standing arrangement") are allowed, but still describe the pattern and never a feeling or a promise.
+
+### Against other clubs
+
+`EraProspect.vs` is a career-long record per opposing club (meetings, tries, straights of scoring, dry spells, unbeaten
+runs, defeats) and per opposing player who scored or was carded in a match the followed player played (both scored,
+only the opponent scored, both carded). `moments.ts` turns growth in these into candidates that compete with the
+teammate patterns for three places a season. A pattern already told is told again only after it grows by a few
+meetings (`nextAt`). The first meeting with the origin club is always written, once. The scoring race (top or within
+12 points of the top) comes from `seasonStats` at season end. Narrative tropes covered: the revenge game, the
+hunting ground, the bogey side, the unbeaten run, the nemesis, the personal duel, the spirited fixture, the title
+race. Still open: a former teammate met as an opponent, and a return to the origin club.

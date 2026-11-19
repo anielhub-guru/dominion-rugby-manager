@@ -90,11 +90,13 @@ function careerPanel(s: SeasonState, e: EraProspect): HTMLElement {
 
   const items = chronicleItems(e, nameOf);
   const story = h("ol", { class: "timeline" }, ...items.map((i) => h("li", { class: i.story ? "story" : "" }, h("span", { class: "when" }, `S${i.season}`), h("span", { class: "what" }, i.text))));
-  const others = alongside(e);
-  const side = h("div", { class: "alongside" }, h("h4", {}, "Alongside"),
-    ...(others.length
-      ? others.map((o) => h("div", { class: "mate" }, h("b", {}, o.name), h("span", { class: "dim" }, o.what.join(" · "))))
-      : [h("div", { class: "hint" }, "No teammate has stood out yet.")]));
+  const others = alongside(e, nameOf);
+  const mate = (o: (typeof others)[number]) => h("div", { class: "mate" }, h("b", {}, o.club ? `${o.name} (${o.club})` : o.name), h("span", { class: "dim" }, o.what.join(" · ")));
+  const teammates = others.filter((o) => !o.club);
+  const rivals = others.filter((o) => o.club);
+  const side = h("div", { class: "alongside" },
+    h("h4", {}, "Teammates"), ...(teammates.length ? teammates.map(mate) : [h("div", { class: "hint" }, "No teammate has stood out yet.")]),
+    h("h4", {}, "Opponents"), ...(rivals.length ? rivals.map(mate) : [h("div", { class: "hint" }, "No opponent has stood out yet.")]));
   panel.append(h("div", { class: "career-body" }, h("div", {}, h("h4", {}, "Story"), story), side));
   if (e.summary) panel.append(h("div", { class: "career-end" }, e.summary));
 
