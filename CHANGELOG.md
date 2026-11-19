@@ -4,7 +4,7 @@ Versions follow `MAJOR.MINOR.PATCH`. The version lives in `package.json` and is 
 `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock` (a test fails if they
 drift apart). It is shown in the app footer and on the new-game screen.
 
-## Unreleased
+## 0.11.0
 
 - History tab: followed careers are now tabs, one per player. Live careers come first, newest first; players who have
   retired or left the league follow, greyed and marked "retired" or "closed". The first tab is open by default.
