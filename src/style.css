@@ -512,3 +512,26 @@ dialog.story p { margin: 8px 0; }
 dialog.story .story-kicker { margin: 0 0 6px -4px; }
 dialog.story .story-art { margin: -4px 0 10px; text-align: center; }
 dialog.story .story-art img { max-width: 100%; max-height: 220px; object-fit: contain; }
+
+/* History tab: one panel per followed career. */
+.career { border: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 10px 12px; margin: 10px 0 0; }
+.career-head { display: flex; align-items: center; gap: 6px; }
+.career-head h3 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--acc); }
+.career-head .card-chip { margin: 0; }
+.career h4 { margin: 10px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); font-weight: normal; }
+.career-body { display: grid; grid-template-columns: minmax(0, 2fr) minmax(160px, 1fr); gap: 16px; align-items: start; }
+.timeline { list-style: none; margin: 0; padding: 0 0 0 10px; border-left: 1px solid var(--line); font-size: 12px; }
+.timeline li { display: grid; grid-template-columns: 34px 1fr; gap: 8px; padding: 3px 0; position: relative; color: var(--dim); }
+.timeline li::before { content: ""; position: absolute; left: -14px; top: 9px; width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+.timeline li .when { color: var(--dim); }
+.timeline li.story { color: var(--text); }
+.timeline li.story::before { background: var(--acc); }
+.timeline li.story .when { color: var(--acc); }
+.alongside .mate { display: flex; flex-direction: column; padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+.alongside .mate .dim { font-size: 11px; }
+.career-end { margin-top: 8px; padding-left: 10px; border-left: 2px solid var(--line); color: var(--dim); font-size: 12px; }
+@media (max-width: 720px) { .career-body { grid-template-columns: 1fr; } }
+.card-chip.g { background: var(--acc); }
+.career table.squad { font-size: 12px; }
+.career table.squad th, .career table.squad td { padding: 3px 8px; font-size: 12px; }
+.career table.squad th:nth-child(2), .career table.squad td:nth-child(2) { text-align: left; }

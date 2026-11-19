@@ -1,7 +1,7 @@
 import { hashSeed, Rng } from "../engine/rng";
 import type { Player, Role, Team } from "../engine/types";
 import { makeProspects, overall } from "./teams";
-import { closeLedger, type Ledger } from "./moments";
+import { STORY_KEYS, closeLedger, type Ledger } from "./moments";
 import { SHORT, storyText, type WordKey } from "./wording";
 
 /**
@@ -168,7 +168,10 @@ export function retirementNews(r: EraProspect, age: number, nameOf: (clubId: str
 }
 
 /** Permanent profile lines, oldest first. */
-export function chronicleLines(r: EraProspect, nameOf: (clubId: string) => string): string[] {
+export const chronicleLines = (r: EraProspect, nameOf: (clubId: string) => string): string[] => chronicleItems(r, nameOf).map((i) => `S${i.season} ${i.text}`);
+
+/** The same lines as parts, so a screen can lay them out. `story` marks moments and pairs, as against the plain facts of a career. */
+export function chronicleItems(r: EraProspect, nameOf: (clubId: string) => string): { season: number; text: string; story: boolean }[] {
   const text = (c: ChronicleEntry): string => {
     const club = c.clubId ? nameOf(c.clubId) : "";
     switch (c.key) {
@@ -182,7 +185,7 @@ export function chronicleLines(r: EraProspect, nameOf: (clubId: string) => strin
       default: return storyText(c.key, { name: r.name, club, other: c.otherName, vs: c.vsId ? nameOf(c.vsId) : undefined, score: c.score, minute: c.minute, n: c.value, role: r.role, age: c.value }, r.id, c.season, c.otherId ?? c.vsId ?? "");
     }
   };
-  return [...r.chronicle].sort((a, b) => a.season - b.season).map((c) => `S${c.season} ${text(c)}`);
+  return [...r.chronicle].sort((a, b) => a.season - b.season).map((c) => ({ season: c.season, text: text(c), story: STORY_KEYS.has(c.key) }));
 }
 
 /** The other players in a career, with what the chronicle says about each. */

@@ -1,6 +1,6 @@
 import { h } from "../dom";
 import { LEGEND_MIN_SEASONS, RECORD_KEYS, RECORD_META } from "../league/history";
-import { alongside, chronicleLines, type EraProspect } from "../league/era";
+import { alongside, chronicleItems, isLive, type EraProspect } from "../league/era";
 import { overall } from "../league/teams";
 import { isSeasonOver, seasonRecordFor, teamById, type SeasonRecord, type SeasonState } from "../league/season";
 
@@ -76,23 +76,41 @@ function whereNow(s: SeasonState, e: EraProspect): string {
   return "No longer followed";
 }
 
-/** The careers Dominion follows: a sparse chronicle and the season-by-season record, nothing more. */
+const STATUS_CHIP: Record<string, [string, string]> = { playing: ["PLAYING", "g"], intake: ["SHORTLIST", "y"], unattached: ["NO CLUB", "y"], retired: ["RETIRED", "r"], closed: ["CLOSED", "r"] };
+
+/** One followed career: who they are, their story as a timeline, who they played alongside, then the seasons. */
+function careerPanel(s: SeasonState, e: EraProspect): HTMLElement {
+  const nameOf = (id: string) => teamById(s, id).name;
+  const p = s.teams.flatMap((t) => t.players).find((x) => x.id === e.id);
+  const [chipText, chipCls] = STATUS_CHIP[e.status] ?? ["", ""];
+  const facts = [e.role, whereNow(s, e), ...(p ? [`age ${p.age}`, `overall ${overall(p)}`] : [])].join(" · ");
+  const panel = h("section", { class: "career" },
+    h("div", { class: "career-head" }, h("h3", {}, e.name), h("span", { class: `card-chip ${chipCls}` }, chipText)),
+    h("div", { class: "hint" }, facts));
+
+  const items = chronicleItems(e, nameOf);
+  const story = h("ol", { class: "timeline" }, ...items.map((i) => h("li", { class: i.story ? "story" : "" }, h("span", { class: "when" }, `S${i.season}`), h("span", { class: "what" }, i.text))));
+  const others = alongside(e);
+  const side = h("div", { class: "alongside" }, h("h4", {}, "Alongside"),
+    ...(others.length
+      ? others.map((o) => h("div", { class: "mate" }, h("b", {}, o.name), h("span", { class: "dim" }, o.what.join(" · "))))
+      : [h("div", { class: "hint" }, "No teammate has stood out yet.")]));
+  panel.append(h("div", { class: "career-body" }, h("div", {}, h("h4", {}, "Story"), story), side));
+  if (e.summary) panel.append(h("div", { class: "career-end" }, e.summary));
+
+  panel.append(h("h4", {}, "Season by season"));
+  if (e.seasons.length) panel.append(table(["Season", "Club", "Club finished", "Age", "Overall", "Apps", "Points"], e.seasons.map((x) => [`Season ${x.season}`, nameOf(x.clubId), x.position ? ord(x.position) : "-", x.age ? String(x.age) : "-", x.overall ? String(x.overall) : "-", x.matches ? `${x.apps} of ${x.matches}` : String(x.apps), String(x.points ?? 0)])));
+  else if (e.status === "unattached") panel.append(h("div", { class: "hint" }, `No club yet. ${e.windowLeft ?? 0} ${e.windowLeft === 1 ? "offseason" : "offseasons"} left in which a club may sign them.`));
+  else if (e.status === "playing") panel.append(h("div", { class: "hint" }, "No season on a roster completed yet."));
+  else panel.append(h("div", { class: "hint" }, "No seasons on a roster."));
+  return panel;
+}
+
+/** The careers Dominion follows. Live careers first, then the rest, newest first. */
 export function followedCard(s: SeasonState): HTMLElement {
   const sec = h("section", { class: "card" }, h("h2", {}, "Followed careers"));
-  const list = [...(s.eraProspects ?? [])].sort((a, b) => b.introducedSeason - a.introducedSeason);
+  const list = [...(s.eraProspects ?? [])].sort((a, b) => Number(isLive(b)) - Number(isLive(a)) || b.introducedSeason - a.introducedSeason);
   if (!list.length) return (sec.append(h("div", { class: "hint" }, "Now and then a youth intake marks one prospect. Dominion follows that career and keeps its facts here, whatever happens to them.")), sec);
-  const nameOf = (id: string) => teamById(s, id).name;
-  for (const e of list) {
-    const p = s.teams.flatMap((t) => t.players).find((x) => x.id === e.id);
-    const facts = [e.role, whereNow(s, e), ...(p ? [`age ${p.age}`, `overall ${overall(p)}`] : [])].join(" · ");
-    sec.append(h("h2", { class: "sub" }, e.name), h("div", { class: "hint" }, facts));
-    sec.append(h("ul", { class: "chronicle" }, ...chronicleLines(e, nameOf).map((l) => h("li", {}, l))));
-    const others = alongside(e);
-    if (others.length) sec.append(h("div", { class: "hint" }, "Alongside: " + others.map((o) => `${o.name} (${o.what.join(", ")})`).join("; ")));
-    if (e.seasons.length) sec.append(table(["Season", "Club", "Club finished", "Age", "Overall", "Apps", "Points"], e.seasons.map((x) => [`Season ${x.season}`, nameOf(x.clubId), x.position ? ord(x.position) : "-", x.age ? String(x.age) : "-", x.overall ? String(x.overall) : "-", x.matches ? `${x.apps} of ${x.matches}` : String(x.apps), String(x.points ?? 0)])));
-    else if (e.status === "unattached") sec.append(h("div", { class: "hint" }, `No club yet. ${e.windowLeft ?? 0} ${e.windowLeft === 1 ? "offseason" : "offseasons"} left in which a club may sign them.`));
-    else if (e.status === "playing") sec.append(h("div", { class: "hint" }, "No season on a roster completed yet."));
-    if (e.summary) sec.append(h("div", { class: "hint" }, e.summary));
-  }
+  sec.append(...list.map((e) => careerPanel(s, e)));
   return sec;
 }
