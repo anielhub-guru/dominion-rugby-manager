@@ -4,7 +4,7 @@ Versions follow `MAJOR.MINOR.PATCH`. The version lives in `package.json` and is 
 `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock` (a test fails if they
 drift apart). It is shown in the app footer and on the new-game screen.
 
-## Unreleased
+## 0.11.1
 
 - Followed players: the first match against a former teammate now gets a chronicle line (with the seasons they shared
   and who scored), and so does a return to the club whose intake introduced them, whether they were once on its
