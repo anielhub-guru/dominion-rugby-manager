@@ -16,6 +16,8 @@ concurrency:
 
 jobs:
   deploy:
+    # Push deploys only when the head commit message contains [deploy]; the manual button always deploys.
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy]')
     runs-on: ubuntu-latest
     environment:
       name: github-pages

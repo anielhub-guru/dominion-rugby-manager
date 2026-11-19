@@ -74,7 +74,7 @@ for (const [kind, [original, look]] of Object.entries(KINDS)) {
 }
 for (let pose = 0; pose < 3; pose++) {
   const version = pose + 1;
-  for (const hair of [0, 5, 6, 7, 8, 9]) {
+  for (let hair = 0; hair <= 9; hair++) {
     const suffix = hair ? `-h${hair}` : "";
     copyFileSync(resolve(dirname(src), `cutout-variants/injury-v${version}${suffix}.webp`), new URL(`injury${pose}-${hair}.webp`, out));
     count++;
@@ -91,6 +91,11 @@ for (const [name, file] of DIRECT) {
 // Alternate versions: jackal has one drawing each; kick-chase and waist also have every hairstyle 1-9.
 const variants = resolve(dirname(src), "cutout-variants");
 const copy = (from, to) => { copyFileSync(resolve(variants, `${from}.webp`), new URL(`${to}.webp`, out)); count++; };
+// These poses previously stopped at hairstyles 1-4. Hairstyles 5-9 are complete
+// redraws kept beside the Lab page so the game never needs its vector fallback.
+for (const kind of ["ankle", "card", "celebration", "double", "goal", "goalmiss", "huddle", "intercept", "lastditch", "pass"]) {
+  for (let hair = 5; hair <= 9; hair++) copy(`${kind}-${hair}`, `${kind}-${hair}`);
+}
 for (const v of [1, 2]) {
   for (const kind of ["kickchase", "waist"]) {
     copy(`${kind}-v${v + 1}`, `${kind}${v}-0`);
