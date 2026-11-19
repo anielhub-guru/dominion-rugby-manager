@@ -342,7 +342,15 @@ function formChips(s: SeasonState, id: string): HTMLElement {
 
 /** The tag for a player Dominion follows, shown wherever the player is named so it never depends on the screen. */
 function followedChip(id: string): HTMLElement | null {
-  return state?.eraProspects?.some((e) => e.id === id) ? h("span", { class: "card-chip y", title: "Dominion follows this career. Their potential is not special: they may play for years or never get a contract. See the History tab." }, "FOLLOWED") : null;
+  if (!state?.eraProspects?.some((e) => e.id === id)) return null;
+  const chip = h("span", { class: "card-chip y followed-link", title: "Dominion follows this career. Their potential is not special: they may play for years or never get a contract. Click to open their career on the History tab." }, "FOLLOWED");
+  chip.onclick = (e) => {
+    e.stopPropagation();
+    tab = "history";
+    selectedPlayer = null;
+    render();
+  };
+  return chip;
 }
 
 function playerTable(team: Team, opts: { selectable?: boolean } = {}): HTMLElement {
