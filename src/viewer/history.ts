@@ -1,6 +1,6 @@
 import { h } from "../dom";
 import { LEGEND_MIN_SEASONS, RECORD_KEYS, RECORD_META } from "../league/history";
-import { alongside, chronicleItems, isLive, type EraProspect } from "../league/era";
+import { alongside, chronicleItems, followedTeamNarration, isLive, type EraProspect } from "../league/era";
 import { overall } from "../league/teams";
 import { isSeasonOver, seasonRecordFor, teamById, type SeasonRecord, type SeasonState } from "../league/season";
 
@@ -81,12 +81,15 @@ const STATUS_CHIP: Record<string, [string, string]> = { playing: ["PLAYING", "g"
 /** One followed career: who they are, their story as a timeline, who they played alongside, then the seasons. */
 function careerPanel(s: SeasonState, e: EraProspect): HTMLElement {
   const nameOf = (id: string) => teamById(s, id).name;
-  const p = s.teams.flatMap((t) => t.players).find((x) => x.id === e.id);
+  const club = s.teams.find((t) => t.players.some((p) => p.id === e.id));
+  const p = club?.players.find((x) => x.id === e.id);
+  const teamContext = club ? followedTeamNarration(s.eraProspects ?? [], club) : null;
   const [chipText, chipCls] = STATUS_CHIP[e.status] ?? ["", ""];
   const facts = [e.role, whereNow(s, e), ...(p ? [`age ${p.age}`, `overall ${overall(p)}`] : [])].join(" · ");
   const panel = h("section", { class: `career ${isLive(e) ? "" : "over"}` },
     h("div", { class: "career-head" }, h("h3", {}, e.name), h("span", { class: `card-chip ${chipCls}` }, chipText)),
-    h("div", { class: "hint" }, facts));
+    h("div", { class: "hint" }, facts),
+    teamContext ? h("div", { class: "career-context" }, teamContext) : null);
 
   const items = chronicleItems(e, nameOf);
   const story = h("ol", { class: "timeline" }, ...items.map((i) => h("li", { class: i.story ? "story" : "" }, h("span", { class: "when" }, `S${i.season}`), h("span", { class: "what" }, i.text))));

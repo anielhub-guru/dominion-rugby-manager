@@ -4,6 +4,12 @@ Versions follow `MAJOR.MINOR.PATCH`. The version lives in `package.json` and is 
 `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock` (a test fails if they
 drift apart). It is shown in the app footer and on the new-game screen.
 
+## 0.11.2
+
+- Followed careers sharing a club now get live context in the History tab. It distinguishes players competing for
+  the same natural position, who currently holds that slot, out-of-position starts, and followed teammates in other
+  positions who can be selected alongside them.
+
 ## 0.11.1
 
 - Followed players: the first match against a former teammate now gets a chronicle line (with the seasons they shared

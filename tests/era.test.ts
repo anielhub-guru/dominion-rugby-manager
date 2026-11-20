@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ERA_PITY_SEASONS, eraDue, recordEraSeason, retirementNews, newEraProspect, type EraProspect } from "../src/league/era";
+import { ERA_PITY_SEASONS, eraDue, followedTeamNarration, recordEraSeason, retirementNews, newEraProspect, type EraProspect } from "../src/league/era";
 import { autoPlan, completeOffseason, isSeasonOver, newGame, playMatchday, startNextSeason, teamById, type OffseasonPlan, type SeasonState } from "../src/league/season";
 import { overall } from "../src/league/teams";
 import { ROLES } from "../src/engine/types";
@@ -39,6 +39,54 @@ function run(seed: number, seasons: number, sign: boolean): SeasonState {
 }
 
 describe("era prospects", () => {
+  const followed = (id: string, name: string, role: (typeof ROLES)[number]): EraProspect => ({
+    ...newEraProspect({ id, name, role, age: 18 } as never, "ash", 1), status: "playing",
+  });
+  const team = (players: { id: string; name: string; role: (typeof ROLES)[number] }[], lineup: string[]) => ({
+    id: "ash", name: "Abuja Wardens", players, lineup,
+  }) as never;
+
+  it("narrates the selection combinations when followed players share a club", () => {
+    const ada = followed("a", "Ada", "Winger");
+    const bee = followed("b", "Bee", "Winger");
+    const chi = followed("c", "Chi", "Pivot");
+    const squad = team([
+      { id: "x", name: "Anchor One", role: "Anchor" },
+      { id: "y", name: "Bruiser One", role: "Bruiser" },
+      { id: "c", name: "Chi", role: "Pivot" },
+      { id: "a", name: "Ada", role: "Winger" },
+      { id: "z", name: "Sweeper One", role: "Sweeper" },
+      { id: "b", name: "Bee", role: "Winger" },
+    ], ["x", "y", "c", "a", "z"]);
+
+    expect(followedTeamNarration([ada], squad)).toBeNull();
+    expect(followedTeamNarration([ada, bee], squad)).toContain("Ada and Bee are Wingers competing for one natural starting place");
+    expect(followedTeamNarration([ada, bee], squad)).toContain("Ada currently holds the Winger slot");
+    const mixed = followedTeamNarration([ada, bee, chi], squad)!;
+    expect(mixed).toContain("Three followed careers are together at Abuja Wardens");
+    expect(mixed).toContain("Chi (Pivot) covers a different position and can be selected alongside that contest");
+  });
+
+  it("distinguishes different roles and out-of-position selection", () => {
+    const ada = followed("a", "Ada", "Winger");
+    const bee = followed("b", "Bee", "Winger");
+    const chi = followed("c", "Chi", "Pivot");
+    const different = team([
+      { id: "a", name: "Ada", role: "Winger" },
+      { id: "c", name: "Chi", role: "Pivot" },
+    ], ["a", "c"]);
+    expect(followedTeamNarration([ada, chi], different)).toContain("cover different positions, so they can all be selected together");
+
+    const displaced = team([
+      { id: "x", name: "First Choice", role: "Winger" },
+      { id: "a", name: "Ada", role: "Winger" },
+      { id: "b", name: "Bee", role: "Winger" },
+    ], ["a", "", "", "x", ""]);
+    const text = followedTeamNarration([ada, bee], displaced)!;
+    expect(text).toContain("First Choice currently holds the Winger slot ahead of them");
+    expect(text).toContain("Ada also starts out of position");
+  });
+
   it("are marked at least once per pity window, and are deterministic", () => {
     expect(eraDue(1, 7, 1, 0)).toBe(true);
     expect(eraDue(1, 7, 1, 3)).toBe(false);

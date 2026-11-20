@@ -1,5 +1,5 @@
 import { hashSeed, Rng } from "../engine/rng";
-import type { Player, Role, Team } from "../engine/types";
+import { ROLES, type Player, type Role, type Team } from "../engine/types";
 import { makeProspects, overall } from "./teams";
 import { STORY_KEYS, closeLedger, pruneVs, vsCandidates, type Candidate, type Ledger, type VsRecord } from "./moments";
 import { SHORT, storyText, type WordKey } from "./wording";
@@ -91,6 +91,45 @@ export const ERA_RETURN_CHANCE = 0.5;
 export const REGULAR_SHARE = 0.6;
 
 export const isLive = (r: EraProspect) => r.status === "intake" || r.status === "unattached" || r.status === "playing";
+
+const names = (players: Player[]) => players.length < 2
+  ? players[0]?.name ?? ""
+  : `${players.slice(0, -1).map((p) => p.name).join(", ")} and ${players.at(-1)!.name}`;
+
+/** Live context when two or more followed careers currently share a club. */
+export function followedTeamNarration(followed: EraProspect[], team: Team): string | null {
+  const live = new Set(followed.filter((e) => e.status === "playing").map((e) => e.id));
+  const players = team.players.filter((p) => live.has(p.id));
+  if (players.length < 2) return null;
+
+  const groups = ROLES.map((role) => ({ role, players: players.filter((p) => p.role === role) })).filter((g) => g.players.length);
+  const contested = groups.filter((g) => g.players.length > 1);
+  const open = `${players.length === 2 ? "Two" : players.length === 3 ? "Three" : String(players.length)} followed careers are together at ${team.name}.`;
+  if (!contested.length) {
+    const list = players.map((p) => `${p.name} (${p.role})`);
+    return `${open} ${list.slice(0, -1).join(", ")} and ${list.at(-1)} cover different positions, so they can all be selected together.`;
+  }
+
+  const contests = contested.map(({ role, players: sameRole }) => {
+    const slot = team.players.find((p) => p.id === team.lineup[ROLES.indexOf(role)]);
+    const holder = sameRole.find((p) => p.id === slot?.id);
+    const outOfPosition = sameRole.filter((p) => p.id !== holder?.id && team.lineup.includes(p.id));
+    const place = holder
+      ? `${holder.name} currently holds the ${role} slot.`
+      : slot
+        ? `${slot.name} currently holds the ${role} slot ahead of them.`
+        : `The ${role} slot is currently unfilled.`;
+    const extra = outOfPosition.length
+      ? ` ${names(outOfPosition)} ${outOfPosition.length === 1 ? "also starts" : "also start"} out of position.`
+      : "";
+    return `${names(sameRole)} are ${role}s competing for one natural starting place. ${place}${extra}`;
+  });
+  const other = groups.filter((g) => g.players.length === 1).map((g) => g.players[0]);
+  const alongside = other.length
+    ? ` ${other.map((p) => `${p.name} (${p.role})`).join(" and ")} ${other.length === 1 ? "covers a different position and can" : "cover different positions and can"} be selected alongside ${contested.length === 1 ? "that contest" : "those contests"}.`
+    : "";
+  return `${open} ${contests.join(" ")}${alongside}`;
+}
 
 /** Whether this offseason's intake marks a prospect. Deterministic from the save seed, so reloading cannot reroll it. */
 export function eraDue(seed: number, season: number, lastEraSeason: number | undefined, live: number): boolean {
