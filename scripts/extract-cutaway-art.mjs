@@ -58,7 +58,6 @@ const KINDS = {
   card: [action[6], (l) => main[l][6]],
   waist: [tackle[0], (l) => extra[l][3]],
   double: [tackle[1], (l) => extra[l][4]],
-  ankle: [tackle[2], (l) => extra[l][5]],
   // From the solo page, where only these poses are filled in.
   intercept: [soloAction[4], (l) => soloMain[l][4]],
   goalmiss: [soloAction[5], (l) => soloMain[l][5]],
@@ -71,6 +70,12 @@ save("sprite", sprite);
 for (const [kind, [original, look]] of Object.entries(KINDS)) {
   save(`${kind}-0`, original);
   for (let l = 0; l < 4; l++) save(`${kind}-${l + 1}`, look(l));
+}
+// The original ankle 0-4 images had a full-body tackler pasted into a crop intended to
+// continue beyond the left edge. Keep the corrected, complete redraws beside the Lab page.
+for (let hair = 0; hair <= 4; hair++) {
+  copyFileSync(resolve(dirname(src), `cutout-variants/ankle-${hair}.webp`), new URL(`ankle-${hair}.webp`, out));
+  count++;
 }
 for (let pose = 0; pose < 3; pose++) {
   const version = pose + 1;
@@ -100,7 +105,6 @@ for (const kind of ["ankle", "card", "celebration", "double", "goal", "goalmiss"
 // vector overlay; hairstyles 5-9 are complete redraws of the alternate pose.
 for (const kind of ["ankle", "card", "celebration", "double", "goal", "goalmiss", "huddle", "intercept", "lastditch", "pass"]) {
   copy(`${kind}-v2`, `${kind}1-0`);
-  for (let hair = 1; hair <= 4; hair++) copy(`${kind}-v2`, `${kind}1-${hair}`);
   for (let hair = 5; hair <= 9; hair++) copy(`${kind}-v2-h${hair}`, `${kind}1-${hair}`);
 }
 for (const v of [1, 2]) {
