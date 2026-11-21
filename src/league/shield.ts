@@ -293,23 +293,26 @@ export function shieldSim(state: SeasonState, tie: ShieldTie, live = false): { s
     awayAiSubs: !mineAway,
     homeAuto: !(live && mineHome),
     awayAuto: !(live && mineAway),
+    goldenPoint: true,
     seed: hashSeed(state.seed, state.season, tie.id),
   });
   return { sim, home, away, ...(mineHome ? { managedSide: 0 as const } : mineAway ? { managedSide: 1 as const } : {}) };
 }
 
-/** Who wins a tie's golden-point kick: weighted by team rating, fixed by the seed so a replay shows the same kick. */
-export function goldenWinner(state: SeasonState, tie: ShieldTie): string {
+/** Last resort if a golden-point period passes with no score: a kick weighted by team rating, fixed by the seed. */
+function goldenWinner(state: SeasonState, tie: ShieldTie): string {
   const gap = teamRating(clubTeam(state, tie.a)) - teamRating(clubTeam(state, tie.b));
   return new Rng(hashSeed(state.seed, state.season, tie.id, "golden")).chance(Math.max(0.3, Math.min(0.7, 0.5 + gap * 0.012))) ? tie.a : tie.b;
 }
 
-/** Records a tie's result. A knockout cannot end level: tries decide it, then a golden-point kick weighted by team rating. */
+/** Records a tie's result. A knockout cannot end level: tries decide it, then a sudden-death golden-point period played out by the engine (a rating-weighted kick only if nobody scores). */
 function settle(state: SeasonState, tie: ShieldTie, log: MatchLog): void {
   let winner: string;
   let decider: "tries" | "golden" | undefined;
-  if (log.homeScore !== log.awayScore) winner = log.homeScore > log.awayScore ? tie.a : tie.b;
-  else if (log.homeTries !== log.awayTries) {
+  if (log.homeScore !== log.awayScore) {
+    winner = log.homeScore > log.awayScore ? tie.a : tie.b;
+    if (log.goldenPoint) decider = "golden";
+  } else if (log.homeTries !== log.awayTries) {
     winner = log.homeTries > log.awayTries ? tie.a : tie.b;
     decider = "tries";
   } else {
@@ -323,7 +326,7 @@ function settle(state: SeasonState, tie: ShieldTie, log: MatchLog): void {
 export function tieLine(t: Tournament, tie: ShieldTie): string {
   const r = tie.result;
   if (!r) return `${t.clubs[tie.a].name} v ${t.clubs[tie.b].name}`;
-  const note = r.decider === "tries" ? ` (level on points; ${t.clubs[r.winner].short} scored more tries)` : r.decider === "golden" ? ` (level; ${t.clubs[r.winner].short} won the golden-point kick)` : "";
+  const note = r.decider === "tries" ? ` (level on points; ${t.clubs[r.winner].short} scored more tries)` : r.decider === "golden" ? ` (level; ${t.clubs[r.winner].short} won in golden point)` : "";
   return `${t.clubs[tie.a].name} ${r.aScore}-${r.bScore} ${t.clubs[tie.b].name}${note}`;
 }
 

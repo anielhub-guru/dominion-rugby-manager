@@ -29,6 +29,8 @@ import type { Attr, BanReport, EventType, InjuryReport, MatchEvent, MatchLog, Pl
  * manager change tactics, substitute and give a half-time talk mid-match.
  */
 export const PHASES = 80;
+/** Longest golden-point period, in phases (30 minutes). If still level, the tie falls back to a kick. */
+export const GOLDEN_PHASES = 60;
 /** Chance that a territory kick which would run dead is instead a monster kick that scores. */
 const BOMB_CHANCE = 0.3;
 /** How readily each tactic plays a grubber or a chip and chase near the line. */
@@ -181,6 +183,8 @@ export interface MatchInput {
   rival?: RivalNotes;
   /** The managed club is playing its rival: a hotter match (see derby.ts). Unlike `rival` this changes play, for both sides alike. */
   derby?: boolean;
+  /** A knockout: if level on points and tries at full time, play sudden death until someone scores. */
+  goldenPoint?: boolean;
   seed: number;
 }
 
@@ -338,6 +342,8 @@ export class MatchSim {
   /** "him" or "her" in commentary, following the league being played. */
   private him: string;
   private htDone = false;
+  /** Set once full time has passed with the sides level and a golden-point period begins. */
+  private golden = false;
   phase = 0;
   finished = false;
 
@@ -366,7 +372,7 @@ export class MatchSim {
   }
 
   get minute(): number {
-    return Math.min(40, Math.floor(this.phase / 2) + 1);
+    return this.phase >= PHASES ? 40 + Math.floor((this.phase - PHASES) / 2) + 1 : Math.min(40, Math.floor(this.phase / 2) + 1);
   }
 
   /** Advance one step and return the events it produced (plus anything queued by manager actions). */
@@ -473,6 +479,7 @@ export class MatchSim {
       awayTactic: a.tactic,
       homeScore: h.score,
       awayScore: a.score,
+      ...(this.golden ? { goldenPoint: true } : {}),
       homeTries: h.stats.tries,
       awayTries: a.stats.tries,
       events: this.events,
@@ -587,7 +594,22 @@ export class MatchSim {
     this.resolveInjury();
     if (this.phase >= PHASES) {
       const [h, a] = this.sides;
-      const verdict = h.score === a.score ? "It finishes level" : `${h.score > a.score ? home.name : away.name} take the win`;
+      if (this.input.goldenPoint && !this.golden && h.score === a.score && h.stats.tries === a.stats.tries) {
+        this.golden = true;
+        this.x0 = absX(this.att, this.pos);
+        this.emit("golden", `FULL TIME, and it is ${h.score} - ${a.score} on points and ${h.stats.tries} tries each. GOLDEN POINT: the next score wins the match.`, true);
+        this.att = this.rng.chance(0.5) ? 0 : 1;
+        this.pos = 35;
+        this.tackles = 0;
+        this.chain = null;
+        return;
+      }
+      if (this.golden && h.score === a.score && this.phase < PHASES + GOLDEN_PHASES) {
+        this.playPhase();
+        this.phase++;
+        return;
+      }
+      const verdict = h.score === a.score ? "It finishes level" : this.golden ? `${h.score > a.score ? home.name : away.name} win it in golden point` : `${h.score > a.score ? home.name : away.name} take the win`;
       this.x0 = absX(this.att, this.pos);
       const rv = this.input.rival;
       const mine = rv ? (rv.managedIsHome ? h.score - a.score : a.score - h.score) : 0;

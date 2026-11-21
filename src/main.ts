@@ -59,7 +59,7 @@ import { buildTable } from "./viewer/table";
 import { championsCard, clubCard, followedCard } from "./viewer/history";
 import { showStory, storyOpen } from "./viewer/story";
 import { reviewSeason } from "./league/review";
-import { goldenWinner, acceptShield, declineShield, dismissVictory, managedTie, playShieldRound, shieldBlocksSeason, shieldEnding, shieldPending, shieldSim } from "./league/shield";
+import { acceptShield, declineShield, dismissVictory, managedTie, playShieldRound, shieldBlocksSeason, shieldEnding, shieldPending, shieldSim } from "./league/shield";
 import { endingView, requestCard, shieldView, tournamentCard, type ShieldActions } from "./viewer/shield";
 import { adviseRecruitment, type Part } from "./league/recruit";
 
@@ -204,7 +204,6 @@ function watchShield() {
     away,
     sim,
     managedSide,
-    goldenPoint: () => (goldenWinner(s, tie) === tie.a ? 0 : 1),
     onBack: () => {
       live?.dispose();
       live = null;
@@ -276,12 +275,8 @@ function replayMatch(id: string) {
   void guarded(async () => {
     const log = await store.readMatchLog(id);
     if (!log) throw new Error("Match log not found on disk.");
-    // A replayed Shield tie that went to a golden-point kick shows the kick again.
-    const tie = s.shield?.tournament?.rounds.flatMap((r) => r.ties).find((t) => t.id === id);
-    const gp = tie?.result?.decider === "golden" ? (tie.result.winner === tie.a ? (0 as const) : (1 as const)) : undefined;
     live = new LiveMatch({
     onHelp: showRules,
-      ...(gp !== undefined ? { goldenPoint: () => gp } : {}),
       home: teamById(s, log.homeId),
       away: teamById(s, log.awayId),
       log,

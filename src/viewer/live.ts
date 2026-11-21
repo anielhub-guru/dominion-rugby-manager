@@ -29,14 +29,13 @@ export interface LiveOptions {
   onExit: (log: MatchLog, live: boolean) => void;
   /** Live mode: leave before full time without playing the match. */
   onBack?: () => void;
-  /** Shield ties only: which side (0 home, 1 away) wins the golden-point kick if the match ends level on points and tries. */
-  goldenPoint?: () => 0 | 1;
   /** Opens the How to play guide. A live match is paused first. */
   onHelp?: () => void;
 }
 
 const LABEL: Partial<Record<EventType, string>> = {
   kickoff: "KICK-OFF",
+  golden: "GOLDEN POINT",
   carry: "RUN",
   break: "LINE BREAK",
   kick: "KICK",
@@ -67,7 +66,7 @@ export const CLOCK_RATE = 30;
 const MIN_HOLD_MS = 3300;
 /** Routine moments are only narrated when this many match seconds have passed since the last line. */
 const MINOR_GAP_SEC = 110;
-const ALWAYS_SHOWN = new Set<EventType>(["kickoff", "halftime", "fulltime", "sub", "talk"]);
+const ALWAYS_SHOWN = new Set<EventType>(["kickoff", "halftime", "golden", "fulltime", "sub", "talk"]);
 
 const secOf = (e: MatchEvent) => e.sec ?? Math.max(0, (e.minute - 1) * 60);
 const fmtClock = (sec: number) => `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
@@ -346,9 +345,9 @@ export class LiveMatch {
     if (this.disposed) return;
     const now = performance.now();
     if (this.started && !this.paused && !this.clockFrozen && !this.done && !this.skipping) {
-      this.clockSec = Math.min(2400, this.pendingSec + 20, this.clockSec + 0.05 * this.speed * CLOCK_RATE);
+      this.clockSec = Math.min(3300, this.pendingSec + 20, this.clockSec + 0.05 * this.speed * CLOCK_RATE);
       this.clock.textContent = fmtClock(this.clockSec);
-      this.progress.style.width = `${(this.clockSec / 2400) * 100}%`;
+      this.progress.style.width = `${Math.min(100, (this.clockSec / 2400) * 100)}%`;
     }
     if (this.paused) this.arenaCloseAt += 50;
     if (this.arenaOpen && !this.inHighlight && now >= this.arenaCloseAt) {
@@ -445,6 +444,7 @@ export class LiveMatch {
       this.showCover(ev.type === "red");
       this.setPaused(true);
     }
+    if (ev.type === "golden" && !this.skipping) await this.goldenCard();
     if (ev.type === "halftime") {
       this.clockFrozen = true;
       this.clockSec = Math.max(this.clockSec, 1200);
@@ -455,6 +455,18 @@ export class LiveMatch {
         window.setTimeout(() => (this.clockFrozen = false), 2500 / this.speed);
       }
     }
+  }
+
+  /** A title card over the stage when a Shield tie goes to sudden death. The play that follows is the real match. */
+  private async goldenCard() {
+    const el = h("div", { class: "gp" }, h("div", { class: "gp-glow" }), h("div", { class: "gp-title" }, "GOLDEN POINT"), h("div", { class: "gp-sub" }, "Level after 80 minutes. The next score wins the match."));
+    this.stage.append(el);
+    this.clockFrozen = true;
+    for (let t = 0; t < 2800 && !this.skipping && !this.disposed; t += 40) await new Promise((r) => window.setTimeout(r, 40));
+    el.classList.add("out");
+    await new Promise((r) => window.setTimeout(r, 350));
+    el.remove();
+    this.clockFrozen = false;
   }
 
   /** A card or the kick-off has no arena scene, so open the stage for the illustrated cutaway on its own. */
@@ -582,63 +594,9 @@ export class LiveMatch {
     const log = sim ? sim.toLog() : replay!;
     this.stage.classList.remove("hl");
     this.arena.clear();
-    const level = log.homeScore === log.awayScore && log.homeTries === log.awayTries;
-    if (!this.opts.goldenPoint || !level) return this.conclude(log);
-    // Level on points and tries: a golden-point kick decides it. Show it before the full-time summary.
-    this.status.textContent = "Level after 80 minutes. Golden point...";
-    this.skipBtn.disabled = true;
-    this.backBtn.hidden = true;
-    this.pauseBtn.disabled = true;
-    const side = this.opts.goldenPoint();
-    void this.playGoldenPoint(log, side).then(() => {
-      if (!this.disposed) this.conclude(log, side);
-    });
-  }
-
-  /** The golden-point sequence: a gold banner, the kick at the posts, and the winners. Click to skip. */
-  private async playGoldenPoint(log: MatchLog, winner: 0 | 1): Promise<void> {
-    const { home, away } = this.opts;
-    const team = winner === 0 ? home : away;
-    const color = teamColor(team.id, winner === 0 ? undefined : "#f0b35a");
-    const posts = `<svg class="gp-posts" viewBox="0 0 120 150" aria-hidden="true"><path d="M30 150V30M90 150V30M30 80H90" stroke="#f4f1e8" stroke-width="5" fill="none" stroke-linecap="round"/></svg>`;
-    const ball = `<svg class="gp-ball" viewBox="0 0 40 26" aria-hidden="true"><ellipse cx="20" cy="13" rx="18" ry="10" fill="#c9884a" stroke="#f4f1e8" stroke-width="1.5"/><path d="M9 13h22M15 9v8M20 8v10M25 9v8" stroke="#f4f1e8" stroke-width="1.2" fill="none"/></svg>`;
-    const el = h("div", { class: "gp", title: "Click to skip" });
-    el.innerHTML = `<div class="gp-glow"></div>${posts}${ball}<div class="gp-title">GOLDEN POINT</div><div class="gp-sub">Level at ${log.homeScore}-${log.awayScore}, and level on tries. Next score wins.</div><div class="gp-result"></div>`;
-    (el.querySelector(".gp-result") as HTMLElement).textContent = `${team.name} WIN IT`;
-    (el.querySelector(".gp-result") as HTMLElement).style.color = color;
-    this.stage.append(el);
-    this.cmTag.textContent = "FULL TIME  ·  GOLDEN POINT";
-    const fresh = h("div", { class: "cm-text fresh t-fulltime key" }, "Level after 80 minutes. The next score wins it.");
-    this.cmText.replaceWith(fresh);
-    this.cmText = fresh;
-    let skipped = false;
-    el.onclick = () => (skipped = true);
-    const wait = async (ms: number) => {
-      for (let t = 0; t < ms && !skipped && !this.disposed; t += 40) await new Promise((r) => window.setTimeout(r, 40));
-    };
-    el.classList.add("s1");
-    await wait(2600);
-    if (!skipped) {
-      el.classList.add("s2");
-      this.cmText.textContent = `${team.name} line up the kick for the posts...`;
-      await wait(2200);
-    }
-    if (!skipped) {
-      el.classList.add("s3");
-      this.cmText.textContent = `GOLDEN POINT! ${team.name} win it from the kick.`;
-      await wait(2800);
-    }
-    el.classList.add("out");
-    await new Promise((r) => window.setTimeout(r, skipped ? 0 : 350));
-    el.remove();
-  }
-
-  private conclude(log: MatchLog, goldenWinner?: 0 | 1) {
-    const { sim } = this.opts;
     const potm = playerOfTheMatch(log);
     this.cmTag.textContent = potm ? `FULL TIME  ·  ★ PLAYER OF THE MATCH: ${potm.line.name.toUpperCase()} (${potm.rating.toFixed(1)})` : "FULL TIME";
-    const gp = goldenWinner === undefined ? "" : ` (${goldenWinner === 0 ? log.homeName : log.awayName} win in golden point)`;
-    const fresh = h("div", { class: "cm-text fresh t-fulltime key" }, `${log.homeName} ${log.homeScore} - ${log.awayScore} ${log.awayName}${gp}`);
+    const fresh = h("div", { class: "cm-text fresh t-fulltime key" }, `${log.homeName} ${log.homeScore} - ${log.awayScore} ${log.awayName}`);
     this.cmText.replaceWith(fresh);
     this.cmText = fresh;
     this.status.textContent = "The match is over.";

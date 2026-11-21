@@ -72,6 +72,7 @@ export interface Team {
 
 export type EventType =
   | "kickoff"
+  | "golden"
   | "sub"
   | "talk"
   | "carry"
@@ -225,6 +226,8 @@ export interface MatchLog {
   awayScore: number;
   homeTries: number;
   awayTries: number;
+  /** True when the match went to a sudden-death golden-point period (Founders' Shield knockouts). */
+  goldenPoint?: boolean;
   events: MatchEvent[];
   stats: [TeamStats, TeamStats];
   /** Per-player match lines. Missing on logs saved before player stats existed. */

@@ -12,7 +12,7 @@ drift apart). It is shown in the app footer and on the new-game screen.
   the fourth. Declining costs nothing and she asks again later.
 - Once accepted, a ten-club knockout is played every postseason: you, four Dominion clubs by league position and five
   persistent Pinnacle clubs. Two preliminary ties, then quarter-finals (you are always seeded in), semi-finals and the
-  final. Level matches are settled on tries, then a golden-point kick. Shield matches use rested squads and do not touch
+  final. Level matches are settled on tries; if tries are level too, a sudden-death golden-point period is played out with real tries, kicks and highlights until someone scores. Shield matches use rested squads and do not touch
   the league table, stats, injuries or money. Watch your own ties live or quick-sim them; the rest use the match engine.
 - Each Shield scores a point for the winner's league, first to five. Five for Dominion ends the threat and the career goes
   on; five for Pinnacle ends the career, with a campaign history and legacy report and the option to begin a new career.
