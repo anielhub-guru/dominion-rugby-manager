@@ -94,8 +94,8 @@ const LABELS = {
     ["a fully fledged rivalry", "a rivalry with history", "a rivalry told in tries"],
   ],
   nemesis: [
-    ["a thorn in their side", "an awkward opponent", "a nemesis in the making"],
-    ["a nemesis", "a mismatch of fortunes", "an opponent who has their number", "a recurring problem"],
+    ["a thorn in the side", "an awkward opponent", "a nemesis in the making"],
+    ["a nemesis", "a mismatch of fortunes", "an opponent with the upper hand", "a recurring problem"],
     ["a fully fledged nemesis", "someone who owns the fixture", "a problem with no answer yet"],
   ],
   clash: [
@@ -231,8 +231,8 @@ const DUEL: VsLine[] = [
   (w, l) => `${w.n} matches in which they and ${w.other} (${w.vs}) both crossed. ${cap(l)}`,
 ];
 const NEMESIS: VsLine[] = [
-  (w, l) => `${w.other} of ${w.vs} scored against them in ${w.n} matches in which they did not: ${l}`,
-  (w, l) => `${w.other} (${w.vs}) found the line ${w.n} times when they could not, ${l}`,
+  (w, l) => `${w.other} of ${w.vs} scored against ${w.name} in ${w.n} matches in which ${w.name} did not: ${l}`,
+  (w, l) => `${w.other} (${w.vs}) found the line ${w.n} times when ${w.name} could not, ${l}`,
   (w, l) => `${w.n} matches against ${w.other} of ${w.vs} in which ${w.sex === "women" ? "she" : "he"} scored a try and ${w.name} did not: ${l}`,
 ];
 const CLASH: VsLine[] = [
