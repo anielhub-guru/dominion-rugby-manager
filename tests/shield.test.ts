@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SHIELD_WINS, acceptShield, currentRound, declineShield, legacyReport, managedTie, playShieldRound, requestChance, shieldBlocksSeason, shieldPending, type ShieldState } from "../src/league/shield";
+import { SHIELD_WINS, acceptShield, requestText, currentRound, declineShield, legacyReport, managedTie, playShieldRound, requestChance, shieldBlocksSeason, shieldPending, type ShieldState } from "../src/league/shield";
 import { SAVE_VERSION, autoPlan, completeOffseason, isSeasonOver, migrateSave, newGame, playMatchday, startNextSeason, type SeasonState } from "../src/league/season";
 
 const built = (seed = 1): SeasonState => ({ ...newGame(seed, "ash"), facilities: { ash: { training: 3, medical: 3, academy: 3 } } });
@@ -129,5 +129,14 @@ describe("save migration", () => {
     const up = migrateSave(old)!;
     expect(up.version).toBe(SAVE_VERSION);
     expect(up.shield).toBeUndefined();
+  });
+});
+
+describe("women's league wording", () => {
+  it("adds a line backing the women's league to the request, and not to the men's", () => {
+    const men = requestText(newGame(1, "ash", "men")).join(" ");
+    const women = requestText(newGame(1, "ash", "women")).join(" ");
+    expect(women).toContain("our women");
+    expect(men).not.toContain("women");
   });
 });

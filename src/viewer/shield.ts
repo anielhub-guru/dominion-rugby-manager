@@ -154,7 +154,10 @@ export function endingView(s: SeasonState, kind: "lost" | "defended", done: () =
   const personal = sh.personal.shields
     ? `${sh.personal.shields} of the ${sh.campaign.length} Shields in this campaign were won by your club.`
     : "Your club did not win a Shield in this campaign.";
-  const words = lost ? ["Five Shields to Pinnacle. The league is theirs.", "Thank you for everything."] : ["Five Shields. Dominion League is ours.", sh.personal.shields ? "Your club carried us. Thank you." : "Thank you."];
+  const women = s.gender === "women";
+  const words = lost
+    ? ["Five Shields to Pinnacle. The league is theirs.", women ? "Our women gave everything. Never doubt what they showed." : "Thank you for everything."]
+    : ["Five Shields. Dominion League is ours.", women ? "To every girl who watched: this is yours." : sh.personal.shields ? "Your club carried us. Thank you." : "Thank you."];
   const btn = h("button", { class: "primary big" }, lost ? "Begin a new career" : "Continue your career");
   btn.onclick = done;
   const defeated = Object.entries(sh.personal.defeated).sort((a, b) => b[1] - a[1]);

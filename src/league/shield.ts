@@ -183,7 +183,8 @@ export function requestText(s: SeasonState): string[] {
       : titles > 0
         ? `${titles} league title${titles === 1 ? "" : "s"} at ${club}, and every facility built.`
         : `${here.length || "Several"} seasons at ${club}, and every facility built.`;
-  return [opening, "Pinnacle League has the right to challenge for Dominion League. The Founders' Shield will decide it: first to five wins.", "Will you stand for Dominion?"];
+  const women = s.gender === "women";
+  return [opening, ...(women ? ["I believe in our women, and in the strength of this league."] : []), "Pinnacle League has the right to challenge for Dominion League. The Founders' Shield will decide it: first to five wins.", "Will you stand for Dominion?"];
 }
 
 function requireOver(state: SeasonState) {
@@ -407,15 +408,16 @@ function finishTournament(state: SeasonState, news: string[]) {
 
   const reached: RoundId | "won" = mine ? "won" : (t.outAt ?? "final");
   const winnerName = t.clubs[winnerId].name;
+  const women = state.gender === "women";
   let message: string;
   if (decided) {
-    message = league === "dominion" ? `Five Shields. Dominion League is ours.` : `Five Shields. Dominion League is Pinnacle's.`;
+    message = league === "dominion" ? `Five Shields. Dominion League is ours${women ? ", and it belongs to every girl who plays in it" : ""}.` : `Five Shields. Dominion League is Pinnacle's.${women ? " Our women gave everything." : ""}`;
   } else if (mine) {
-    message = `The Shield is yours. ${scoreLine}.`;
+    message = `The Shield is yours. ${scoreLine}.${women ? " Every girl watching saw what is possible." : ""}`;
   } else if (league === "dominion") {
     message = RESCUE_LINE;
   } else {
-    message = `Pinnacle take this one. ${scoreLine}.`;
+    message = `Pinnacle take this one. ${scoreLine}.${women ? " I believe in our women." : ""}`;
   }
   sh.campaign.push({ season: state.season, winnerId, winnerName, league, runnerUpName: t.clubs[runnerUp].name, score: winnerId === final.a ? `${fr.aScore}-${fr.bScore}` : `${fr.bScore}-${fr.aScore}`, clubName: t.clubs[t.managedId].name, reached, message });
   sh.message = message;
