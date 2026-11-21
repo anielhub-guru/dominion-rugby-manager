@@ -102,7 +102,7 @@ function careerPanel(s: SeasonState, e: EraProspect): HTMLElement {
     h("div", { class: "hint" }, facts),
     teamContext ? h("div", { class: "career-context" }, teamContext) : null);
 
-  const items = chronicleItems(e, nameOf);
+  const items = chronicleItems(e, nameOf, s.gender);
   const story = h("ol", { class: "timeline" }, ...items.map((i) => h("li", { class: i.story ? "story" : "" }, h("span", { class: "when" }, `S${i.season}`), h("span", { class: "what" }, i.text))));
   const others = alongside(e, nameOf);
   const mate = (o: (typeof others)[number]) => h("div", { class: "mate" }, h("b", {}, o.club ? `${o.name} (${o.club})` : o.name), h("span", { class: "dim" }, o.what.join(" · ")));

@@ -224,7 +224,7 @@ export function retirementNews(r: EraProspect, age: number, nameOf: (clubId: str
 export const chronicleLines = (r: EraProspect, nameOf: (clubId: string) => string): string[] => chronicleItems(r, nameOf).map((i) => `S${i.season} ${i.text}`);
 
 /** The same lines as parts, so a screen can lay them out. `story` marks moments and pairs, as against the plain facts of a career. */
-export function chronicleItems(r: EraProspect, nameOf: (clubId: string) => string): { season: number; text: string; story: boolean }[] {
+export function chronicleItems(r: EraProspect, nameOf: (clubId: string) => string, sex?: Gender): { season: number; text: string; story: boolean }[] {
   const text = (c: ChronicleEntry): string => {
     const club = c.clubId ? nameOf(c.clubId) : "";
     switch (c.key) {
@@ -235,7 +235,7 @@ export function chronicleItems(r: EraProspect, nameOf: (clubId: string) => strin
       case "first-regular-season": return `First regular season at ${club}`;
       case "title": return `${club} won the league, with ${c.value} ${c.value === 1 ? "appearance" : "appearances"} from them`;
       case "retired": return c.value ? `Retired, aged ${c.value}` : "Retired";
-      default: return storyText(c.key, { name: r.name, club, other: c.otherName, vs: c.vsId ? nameOf(c.vsId) : undefined, score: c.score, minute: c.minute, n: c.value, role: r.role, age: c.value, detail: c.detail }, r.id, c.season, c.otherId ?? c.vsId ?? "");
+      default: return storyText(c.key, { name: r.name, club, other: c.otherName, sex, vs: c.vsId ? nameOf(c.vsId) : undefined, score: c.score, minute: c.minute, n: c.value, role: r.role, age: c.value, detail: c.detail }, r.id, c.season, c.otherId ?? c.vsId ?? "");
     }
   };
   return [...r.chronicle].sort((a, b) => a.season - b.season).map((c) => ({ season: c.season, text: text(c), story: STORY_KEYS.has(c.key) }));

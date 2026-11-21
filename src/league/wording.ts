@@ -1,4 +1,5 @@
 import { hashSeed } from "../engine/rng";
+import type { Gender } from "../engine/types";
 
 /**
  * The words for story moments. Every line states a fact (who, where, how many) and may add one colour word from a
@@ -10,6 +11,8 @@ export interface Words {
   name: string;
   club: string;
   other?: string;
+  /** The league the players are in, for "she" or "he" when naming the other player. */
+  sex?: Gender;
   vs?: string;
   score?: string;
   minute?: number;
@@ -230,7 +233,7 @@ const DUEL: VsLine[] = [
 const NEMESIS: VsLine[] = [
   (w, l) => `${w.other} of ${w.vs} scored against them in ${w.n} matches in which they did not: ${l}`,
   (w, l) => `${w.other} (${w.vs}) found the line ${w.n} times when they could not, ${l}`,
-  (w, l) => `${w.n} matches against ${w.other} of ${w.vs} in which ${w.other} scored a try and they did not: ${l}`,
+  (w, l) => `${w.n} matches against ${w.other} of ${w.vs} in which ${w.sex === "women" ? "she" : "he"} scored a try and they did not: ${l}`,
 ];
 const CLASH: VsLine[] = [
   (w, l) => `Both carded in ${w.n} matches against ${w.other} of ${w.vs}: ${l}`,
