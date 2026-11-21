@@ -417,7 +417,7 @@ function finishTournament(state: SeasonState, news: string[]) {
   } else if (league === "dominion") {
     message = RESCUE_LINE;
   } else {
-    message = `Pinnacle take this one. ${scoreLine}.${women ? " I believe in our women." : ""}`;
+    message = `Pinnacle take this one. ${scoreLine}.${women ? " Our girls can turn this around." : ""}`;
   }
   sh.campaign.push({ season: state.season, winnerId, winnerName, league, runnerUpName: t.clubs[runnerUp].name, score: winnerId === final.a ? `${fr.aScore}-${fr.bScore}` : `${fr.bScore}-${fr.aScore}`, clubName: t.clubs[t.managedId].name, reached, message });
   sh.message = message;
