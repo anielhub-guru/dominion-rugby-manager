@@ -56,7 +56,7 @@ import { LiveMatch } from "./viewer/live";
 import { ATTR_NAMES, TACTIC_FOCUS, bestFive, buildRadar, playerProfile, profileOf } from "./viewer/radar";
 import { buildRules } from "./viewer/rules";
 import { buildTable } from "./viewer/table";
-import { championsCard, clubCard, followedCard } from "./viewer/history";
+import { championsCard, clubCard, followedCard, shieldHistoryCard } from "./viewer/history";
 import { showStory, storyOpen } from "./viewer/story";
 import { reviewSeason } from "./league/review";
 import { acceptShield, declineShield, dismissVictory, managedTie, playShieldRound, shieldBlocksSeason, shieldEnding, shieldPending, shieldSim } from "./league/shield";
@@ -1414,7 +1414,7 @@ function render() {
   else if (tab === "deals") body.append(dealsView(s));
   else if (tab === "table") body.append(card("League table", buildTable(s, { onClub: (id) => (id === s.managedId ? undefined : scout(s, id)) }), h("div", { class: "hint" }, "▲▼ = places moved since the previous matchday. Win 4, draw 2, +1 for 3+ tries (TF), +1 for losing by 7 or fewer (BP). Click a club to scout it.")));
   else if (tab === "shield") body.append(shieldView(s, shieldActions()));
-  else if (tab === "history") body.append(h("div", { class: "col" }, championsCard(s), followedCard(s, historyCareer, (id) => { historyCareer = id; render(); }), clubCard(s, historyClub && s.records[historyClub] ? historyClub : s.managedId, (id) => { historyClub = id; render(); })));
+  else if (tab === "history") body.append(h("div", { class: "col" }, championsCard(s), ...[shieldHistoryCard(s)].filter((x): x is HTMLElement => !!x), followedCard(s, historyCareer, (id) => { historyCareer = id; render(); }), clubCard(s, historyClub && s.records[historyClub] ? historyClub : s.managedId, (id) => { historyClub = id; render(); })));
   else body.append(fixturesView(s));
   app.append(body);
   if (error) app.append(h("div", { class: "err" }, error));

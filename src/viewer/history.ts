@@ -1,6 +1,7 @@
 import { h } from "../dom";
 import { LEGEND_MIN_SEASONS, RECORD_KEYS, RECORD_META } from "../league/history";
 import { alongside, chronicleItems, followedTeamNarration, isLive, type EraProspect } from "../league/era";
+import { reachedText } from "../league/shield";
 import { overall } from "../league/teams";
 import { isSeasonOver, seasonRecordFor, teamById, type SeasonRecord, type SeasonState } from "../league/season";
 
@@ -39,6 +40,16 @@ export function championsCard(s: SeasonState): HTMLElement {
   sec.append(table(["Season", "Champions", "Runners-up", "Top scorer (pts)", "You finished"], rows));
   const counts = [...titles].sort((a, b) => b[1] - a[1]).map(([id, n]) => `${name(s, id)} ${n}`);
   sec.append(h("div", { class: "hint" }, `Titles: ${counts.join(", ")}.`));
+  return sec;
+}
+
+/** Founders' Shield winners by year; empty until the first tournament has been played. */
+export function shieldHistoryCard(s: SeasonState): HTMLElement | null {
+  const camp = s.shield?.campaign ?? [];
+  if (!camp.length) return null;
+  const sec = h("section", { class: "card" }, h("h2", {}, "Founders' Shield by year"));
+  sec.append(table(["Season", "Winners", "Runners-up", "Final", "You"], [...camp].reverse().map((r) => [`Season ${r.season}`, `${r.winnerName}${r.league === "pinnacle" ? " (P)" : ""}`, r.runnerUpName, r.score, reachedText(r.reached)])));
+  sec.append(h("div", { class: "hint" }, "(P) marks a Pinnacle club."));
   return sec;
 }
 

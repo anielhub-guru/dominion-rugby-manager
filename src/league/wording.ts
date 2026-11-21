@@ -230,7 +230,7 @@ const DUEL: VsLine[] = [
 const NEMESIS: VsLine[] = [
   (w, l) => `${w.other} of ${w.vs} scored against them in ${w.n} matches in which they did not: ${l}`,
   (w, l) => `${w.other} (${w.vs}) found the line ${w.n} times when they could not, ${l}`,
-  (w, l) => `Every time ${w.other} of ${w.vs} scored against them (${w.n} matches), they went without. ${cap(l)}`,
+  (w, l) => `${w.other} of ${w.vs} scored against them in ${w.n} matches, and each time they went without: ${l}`,
 ];
 const CLASH: VsLine[] = [
   (w, l) => `Both carded in ${w.n} matches against ${w.other} of ${w.vs}: ${l}`,
