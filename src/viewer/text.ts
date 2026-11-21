@@ -7,7 +7,7 @@ export function scorerLines(m: MatchLog): string[] {
   const label: Record<string, string> = { try: "try", conversion: "con", "penalty-goal": "pen", "drop-goal": "drop", yellow: "YELLOW CARD", red: "RED CARD" };
   return m.events
     .filter((e) => e.type in label)
-    .map((e) => `${String(e.minute).padStart(2)}'  ${(e.team === 0 ? m.homeName : m.awayName).padEnd(20)} ${e.player} (${label[e.type]})`);
+    .map((e) => `${String(e.minute).padStart(2)}'  ${(e.team === 0 ? m.homeName : m.awayName).padEnd(20)} ${e.player} (${label[e.type]})${m.goldenPoint && e.minute > 40 && e.type !== "yellow" && e.type !== "red" ? " GOLDEN POINT" : ""}`);
 }
 
 /** Two-sided stat bars, FM match-summary style. */

@@ -571,11 +571,12 @@ blockquote.daniel .who { font-style: normal; font-size: 10px; letter-spacing: 2p
 .ending table.squad th, .ending table.squad td, .col table.squad.shield-table td { text-align: left; }
 
 /* Golden point: a title card over the stage when a Founders' Shield tie goes to sudden death. */
-.gp { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: #0b100ef0; overflow: hidden; animation: gp-in .35s ease-out both; }
+.gp { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: #0b100e; overflow: hidden; animation: gp-in .35s ease-out both; }
 .gp.out { animation: gp-out .35s ease-in forwards; }
 .gp-glow { position: absolute; inset: -30%; background: radial-gradient(circle at 50% 45%, #e8c14a55, transparent 55%); animation: gp-pulse 1.6s ease-in-out infinite alternate; }
 .gp-title { position: relative; font-size: 34px; font-weight: 800; letter-spacing: .22em; color: #e8c14a; text-shadow: 0 0 18px #e8c14aaa; animation: gp-title .8s cubic-bezier(.2,1.4,.4,1) both; }
 .gp-sub { position: relative; color: var(--dim); font-size: 13px; animation: fadein .6s .6s ease-out both; }
+.gp button { position: relative; margin-top: 10px; animation: fadein .6s 1s ease-out both; }
 @keyframes gp-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes gp-out { to { opacity: 0; } }
 @keyframes gp-pulse { from { opacity: .5; transform: scale(.9); } to { opacity: 1; transform: scale(1.1); } }

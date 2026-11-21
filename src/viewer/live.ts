@@ -155,6 +155,7 @@ export class LiveMatch {
     this.done = true;
     window.clearInterval(this.ticker);
     this.cutaways.cancel();
+    this.goldenResolve?.();
     this.arena.dispose();
     this.fx.dispose();
     this.wake?.();
@@ -309,6 +310,7 @@ export class LiveMatch {
     this.resumeBar.hidden = !(p && this.started && !!this.opts.sim && !this.done);
     this.pauseBtn.textContent = p ? (this.started ? "Resume" : "Kick off") : "Pause";
     if (!p) {
+      this.goldenResolve?.();
       this.started = true;
       this.status.textContent = this.opts.log ? "Replay" : "";
       this.wake?.();
@@ -398,6 +400,15 @@ export class LiveMatch {
   private async process(ev: MatchEvent) {
     this.pendingSec = secOf(ev);
     await this.clockTo(secOf(ev));
+    if (this.skipping && ev.type === "golden") {
+      // Skip to end stops at the golden-point break: the extra time is played, never skipped past unseen.
+      this.skipping = false;
+      this.clockSec = secOf(ev);
+      this.clock.textContent = fmtClock(this.clockSec);
+      this.score.textContent = `${ev.homeScore} - ${ev.awayScore}`;
+      this.skipBtn.disabled = false;
+      this.status.textContent = this.opts.log ? "Replay" : "";
+    }
     if (this.skipping) {
       this.logLine(ev, false);
       this.setPressure(ev.x1 / 100);
@@ -457,16 +468,34 @@ export class LiveMatch {
     }
   }
 
-  /** A title card over the stage when a Shield tie goes to sudden death. The play that follows is the real match. */
+  /** Released when the viewer is ready for golden point to start (the Start button, or Resume in a live match). */
+  private goldenResolve: (() => void) | null = null;
+
+  /**
+   * The break before sudden death, like half time: a title card over the stage and the match held until you start it.
+   * A live match pauses so tactics and substitutes can change; the play that follows is the real match.
+   */
   private async goldenCard() {
-    const el = h("div", { class: "gp" }, h("div", { class: "gp-glow" }), h("div", { class: "gp-title" }, "GOLDEN POINT"), h("div", { class: "gp-sub" }, "Level after 80 minutes. The next score wins the match."));
+    const start = h("button", { class: "primary big" }, "Start golden point");
+    const el = h("div", { class: "gp" }, h("div", { class: "gp-glow" }), h("div", { class: "gp-title" }, "GOLDEN POINT"), h("div", { class: "gp-sub" }, "Level after 80 minutes. The next score wins the match."), start);
     this.stage.append(el);
     this.clockFrozen = true;
-    for (let t = 0; t < 2800 && !this.skipping && !this.disposed; t += 40) await new Promise((r) => window.setTimeout(r, 40));
+    this.clock.textContent = "FT";
+    const managed = !!this.opts.sim && this.opts.managedSide !== undefined;
+    if (managed) {
+      this.setPaused(true);
+      this.status.textContent = "Golden point. Change tactics or substitute, then start.";
+    }
+    await new Promise<void>((resolve) => {
+      this.goldenResolve = resolve;
+      start.onclick = () => (managed ? this.setPaused(false) : resolve());
+    });
+    this.goldenResolve = null;
     el.classList.add("out");
     await new Promise((r) => window.setTimeout(r, 350));
     el.remove();
     this.clockFrozen = false;
+    this.status.textContent = this.opts.log ? "Replay" : "";
   }
 
   /** A card or the kick-off has no arena scene, so open the stage for the illustrated cutaway on its own. */
