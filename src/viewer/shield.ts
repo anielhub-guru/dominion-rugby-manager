@@ -22,7 +22,7 @@ import type { SeasonState } from "../league/season";
 
 const card = (title: string, ...kids: (Node | string)[]) => h("section", { class: "card" }, h("h2", {}, title), ...kids);
 /** Her role is stated once, on the request. Everywhere else it is just her full name. */
-const quote = (text: string, intro = false) => h("blockquote", { class: "daniel" }, h("div", { class: "who" }, intro ? `${MRS_DANIEL}, owner` : MRS_DANIEL), text);
+const quote = (text: string, intro = false) => h("blockquote", { class: "daniel" }, h("div", { class: "who" }, intro ? `${MRS_DANIEL} · Owner, Dominion League` : MRS_DANIEL), text);
 
 function table(head: string[], rows: (string | Node)[][]): HTMLElement {
   const body = h("tbody");
