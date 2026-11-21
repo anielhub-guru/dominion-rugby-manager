@@ -177,12 +177,15 @@ export function requestText(s: SeasonState): string[] {
   const first = here[0]?.managedPosition;
   const latest = here[here.length - 1]?.managedPosition;
   const titles = here.filter((r) => r.championId === s.managedId).length;
+  const journey = `I've been following your journey at ${club}`;
+  const facilities = "the impressive work you've done developing the club's facilities";
+  const words = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
   const opening =
     first !== undefined && latest !== undefined && first - latest >= 2
-      ? `I've watched you take ${club} from ${ord(first)} to ${ord(latest)}.`
+      ? `${journey}, from ${ord(first)} place to ${ord(latest)}, and ${facilities}.`
       : titles > 0
-        ? `${titles} league title${titles === 1 ? "" : "s"} at ${club}, and every facility built.`
-        : `${here.length || "Several"} seasons at ${club}, and every facility built.`;
+        ? `${journey}, from winning ${titles === 1 ? "a league title" : `${words[titles] ?? titles} league titles`} to ${facilities}.`
+        : `${journey}, and ${facilities}.`;
   const women = s.gender === "women";
   return [opening, ...(women ? ["I believe in our women, and in the strength of this league."] : []), "Pinnacle League has the right to challenge for Dominion League. The Founders' Shield will decide it: first to five wins.", "Will you stand for Dominion?"];
 }
