@@ -4,7 +4,6 @@ import { FACILITIES, FACILITY_IDS, MAX_FACILITY_LEVEL } from "../league/faciliti
 import { teamRating } from "../league/teams";
 import {
   MRS_DANIEL,
-  REQUEST_TEXT,
   ROUND_NAMES,
   SHIELD_WINS,
   currentRound,
@@ -12,6 +11,7 @@ import {
   leagueOf,
   managedTie,
   reachedText,
+  requestText,
   shieldOf,
   shieldPending,
   tieLine,
@@ -40,12 +40,12 @@ export function scoreboard(s: SeasonState): HTMLElement {
 }
 
 /** Mrs. Daniel's request, shown after the final matchday until you answer. */
-export function requestCard(accept: () => void, decline: () => void): HTMLElement {
+export function requestCard(s: SeasonState, accept: () => void, decline: () => void): HTMLElement {
   const yes = h("button", { class: "primary" }, "Stand for Dominion");
   yes.onclick = accept;
   const no = h("button", {}, "Not this season");
   no.onclick = decline;
-  return card("The Founders' Shield", ...REQUEST_TEXT.map((t) => quote(t)), h("div", { class: "toolbar" }, yes, no), h("div", { class: "hint" }, "Declining costs nothing. She will ask again in a later postseason. Once you accept, the Shield is played every year until one league wins five."));
+  return card("The Founders' Shield", ...requestText(s).map(quote), h("div", { class: "toolbar" }, yes, no), h("div", { class: "hint" }, "Declining costs nothing. She will ask again later."));
 }
 
 function tieBox(t: Tournament, tie: ShieldTie, onReplay?: (id: string) => void): HTMLElement {
@@ -154,9 +154,7 @@ export function endingView(s: SeasonState, kind: "lost" | "defended", done: () =
   const personal = sh.personal.shields
     ? `${sh.personal.shields} of the ${sh.campaign.length} Shields in this campaign were won by your club.`
     : "Your club did not win a Shield in this campaign.";
-  const words = lost
-    ? ["Five Shields to Pinnacle. The league is theirs, and I have signed it over.", "You gave this league everything your club had, and it was not enough on the days that mattered. I will not forget it."]
-    : ["Five Shields. Pinnacle has no claim left, and Dominion League is ours for good.", sh.personal.shields ? "Your club carried us when it counted. Whatever you do next, this league is yours as much as mine." : "Others won the Shields, but your club kept the door open for them. I will not forget it."];
+  const words = lost ? ["Five Shields to Pinnacle. The league is theirs.", "Thank you for everything."] : ["Five Shields. Dominion League is ours.", sh.personal.shields ? "Your club carried us. Thank you." : "Thank you."];
   const btn = h("button", { class: "primary big" }, lost ? "Begin a new career" : "Continue your career");
   btn.onclick = done;
   const defeated = Object.entries(sh.personal.defeated).sort((a, b) => b[1] - a[1]);

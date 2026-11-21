@@ -168,11 +168,23 @@ export function shieldPostseason(state: SeasonState): NewsItem[] {
   return [news(`${MRS_DANIEL} has asked to see you before the new season.`)];
 }
 
-export const REQUEST_TEXT = [
-  "Every part of your club is built, and I have been watching what you have made of it.",
-  "Pinnacle League has bought the right to challenge me for Dominion League. Ownership will be settled by the Founders' Shield: a knockout every year between five of our clubs and five of theirs. The first league to win five Shields keeps the whole thing.",
-  "Your club will be in every one of them. Will you stand for Dominion?",
-];
+const ord = (n: number) => `${n}${n >= 11 && n <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th")}`;
+
+/** Mrs. Daniel's request, opening with what the club has actually done: its climb, its titles, or just its years. */
+export function requestText(s: SeasonState): string[] {
+  const club = s.teams.find((t) => t.id === s.managedId)?.name ?? "your club";
+  const here = s.history.filter((r) => !r.clubId || r.clubId === s.managedId);
+  const first = here[0]?.managedPosition;
+  const latest = here[here.length - 1]?.managedPosition;
+  const titles = here.filter((r) => r.championId === s.managedId).length;
+  const opening =
+    first !== undefined && latest !== undefined && first - latest >= 2
+      ? `I've watched you take ${club} from ${ord(first)} to ${ord(latest)}.`
+      : titles > 0
+        ? `${titles} league title${titles === 1 ? "" : "s"} at ${club}, and every facility built.`
+        : `${here.length || "Several"} seasons at ${club}, and every facility built.`;
+  return [opening, "Pinnacle League has the right to challenge for Dominion League. The Founders' Shield will decide it: first to five wins.", "Will you stand for Dominion?"];
+}
 
 function requireOver(state: SeasonState) {
   if (state.matchday <= state.totalMatchdays) throw new Error("The Founders' Shield is played after the season ends");
@@ -186,8 +198,8 @@ export function acceptShield(prev: SeasonState): SeasonState {
   const sh = state.shield!;
   sh.status = "active";
   sh.pinnacle = PINNACLE_DEFS.map((def) => ({ team: buildTeam(def, hashSeed(state.seed, "pinnacle"), state.gender), color: def.color, strength: def.strength, record: { tournaments: 0, played: 0, won: 0, finals: 0, shields: 0, beatYou: 0, lostToYou: 0 } }));
-  sh.message = "Then it begins. Dominion 0, Pinnacle 0. Five Shields decide it.";
-  state.news = [{ season: state.season, matchday: 0, text: `You accepted ${MRS_DANIEL}'s request. The Founders' Shield campaign begins: first to five Shields owns Dominion League.` }, ...startTournament(state), ...state.news].slice(0, 14);
+  sh.message = "Dominion 0, Pinnacle 0.";
+  state.news = [{ season: state.season, matchday: 0, text: `The Founders' Shield campaign begins. First to five Shields owns Dominion League.` }, ...startTournament(state), ...state.news].slice(0, 14);
   return state;
 }
 
@@ -397,13 +409,13 @@ function finishTournament(state: SeasonState, news: string[]) {
   const winnerName = t.clubs[winnerId].name;
   let message: string;
   if (decided) {
-    message = league === "dominion" ? `${winnerName} have done it. Five Shields: Dominion League is ours for good.` : `${winnerName} take the fifth Shield. It is over. Dominion League is Pinnacle's.`;
+    message = league === "dominion" ? `Five Shields. Dominion League is ours.` : `Five Shields. Dominion League is Pinnacle's.`;
   } else if (mine) {
-    message = `The Shield is yours. That is the one I wanted to see in your hands. ${scoreLine}.`;
+    message = `The Shield is yours. ${scoreLine}.`;
   } else if (league === "dominion") {
     message = RESCUE_LINE;
   } else {
-    message = `Pinnacle take this one with ${winnerName}. ${scoreLine}. There is still time.`;
+    message = `Pinnacle take this one. ${scoreLine}.`;
   }
   sh.campaign.push({ season: state.season, winnerId, winnerName, league, runnerUpName: t.clubs[runnerUp].name, score: winnerId === final.a ? `${fr.aScore}-${fr.bScore}` : `${fr.bScore}-${fr.aScore}`, clubName: t.clubs[t.managedId].name, reached, message });
   sh.message = message;

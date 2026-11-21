@@ -931,7 +931,7 @@ function overviewView(s: SeasonState): HTMLElement {
     const next = h("button", { class: "primary", disabled: blocked }, "Start next season");
     next.onclick = () => void nextSeason();
     left.append(card(`Season ${s.season} complete`, h("p", {}, `Champions: ${champ.name}`), h("p", {}, `Your finish: ${ordinal(pos)} of ${table.length}`), next, ...(blocked ? [h("div", { class: "hint" }, s.shield?.status === "requested" ? "Answer Mrs. Daniel before the next season." : "Play out the Founders' Shield first.")] : [])));
-    if (s.shield?.status === "requested") left.append(requestCard(() => void answerShield(true), () => void answerShield(false)));
+    if (s.shield?.status === "requested") left.append(requestCard(s, () => void answerShield(true), () => void answerShield(false)));
     else if (s.shield?.tournament?.season === s.season && s.shield.status !== "dormant") left.append(tournamentCard(s, shieldActions()));
   } else {
     const f = managedFixture(s)!;
