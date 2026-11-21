@@ -187,7 +187,7 @@ export function requestText(s: SeasonState): string[] {
         ? `${journey}, from winning ${titles === 1 ? "a league title" : `${words[titles] ?? titles} league titles`} to ${facilities}.`
         : `${journey}, and ${facilities}.`;
   const women = s.gender === "women";
-  return [opening, ...(women ? ["I believe in our women, and in the strength of this league."] : []), "Pinnacle League has the right to challenge for Dominion League. The Founders' Shield will decide it: first to five wins.", "Will you stand for Dominion?"];
+  return [opening, ...(women ? ["I believe in our women, and in the strength of this league."] : []), "Pinnacle League has bought the right to challenge me for the Dominion League. Ownership will be decided through the Founders' Shield, an annual knockout competition featuring five clubs from each league. The first league to win five Shields claims it all.", "Will you stand for Dominion?"];
 }
 
 function requireOver(state: SeasonState) {
