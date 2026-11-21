@@ -18,6 +18,7 @@ import { buildTeam, evolvePlayers, makeProspects, teamRating, type TeamDef } fro
 import { aiTactic, type NewsItem, type SeasonState } from "./season";
 
 export const MRS_DANIEL = "Mrs. Rakido Kasham Daniel";
+export const OWNER_TITLE = "Owner, Dominion League";
 /** Tournaments a league must win to decide ownership. */
 export const SHIELD_WINS = 5;
 /** Chance of the request on the first, second, third and later eligible postseasons. Hidden from the player. */
@@ -165,7 +166,7 @@ export function shieldPostseason(state: SeasonState): NewsItem[] {
   live.eligible++;
   if (!new Rng(hashSeed(state.seed, state.season, "shield-request")).chance(requestChance(live.eligible))) return [];
   live.status = "requested";
-  return [news(`${MRS_DANIEL} has asked to see you before the new season.`)];
+  return [news(`${MRS_DANIEL}, owner of Dominion League, has asked to see you before the new season.`)];
 }
 
 const ord = (n: number) => `${n}${n >= 11 && n <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th")}`;

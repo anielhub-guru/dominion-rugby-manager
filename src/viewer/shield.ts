@@ -4,6 +4,7 @@ import { FACILITIES, FACILITY_IDS, MAX_FACILITY_LEVEL } from "../league/faciliti
 import { teamRating } from "../league/teams";
 import {
   MRS_DANIEL,
+  OWNER_TITLE,
   ROUND_NAMES,
   SHIELD_WINS,
   currentRound,
@@ -21,7 +22,7 @@ import {
 import type { SeasonState } from "../league/season";
 
 const card = (title: string, ...kids: (Node | string)[]) => h("section", { class: "card" }, h("h2", {}, title), ...kids);
-const quote = (text: string) => h("blockquote", { class: "daniel" }, h("div", { class: "who" }, MRS_DANIEL), text);
+const quote = (text: string) => h("blockquote", { class: "daniel" }, h("div", { class: "who" }, `${MRS_DANIEL} · ${OWNER_TITLE}`), text);
 
 function table(head: string[], rows: (string | Node)[][]): HTMLElement {
   const body = h("tbody");
