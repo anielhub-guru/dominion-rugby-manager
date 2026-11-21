@@ -3,8 +3,6 @@ import { fmtMoney } from "../league/economy";
 import { FACILITIES, FACILITY_IDS, MAX_FACILITY_LEVEL } from "../league/facilities";
 import { teamRating } from "../league/teams";
 import {
-  MRS_DANIEL,
-  OWNER_TITLE,
   ROUND_NAMES,
   SHIELD_WINS,
   currentRound,
@@ -22,7 +20,8 @@ import {
 import type { SeasonState } from "../league/season";
 
 const card = (title: string, ...kids: (Node | string)[]) => h("section", { class: "card" }, h("h2", {}, title), ...kids);
-const quote = (text: string) => h("blockquote", { class: "daniel" }, h("div", { class: "who" }, `${MRS_DANIEL} · ${OWNER_TITLE}`), text);
+/** Her role is stated once, on the request. Everywhere else she is just "Mrs. Daniel". */
+const quote = (text: string, intro = false) => h("blockquote", { class: "daniel" }, h("div", { class: "who" }, intro ? "Mrs. Daniel, owner" : "Mrs. Daniel"), text);
 
 function table(head: string[], rows: (string | Node)[][]): HTMLElement {
   const body = h("tbody");
@@ -46,7 +45,7 @@ export function requestCard(s: SeasonState, accept: () => void, decline: () => v
   yes.onclick = accept;
   const no = h("button", {}, "Not this season");
   no.onclick = decline;
-  return card("The Founders' Shield", ...requestText(s).map(quote), h("div", { class: "toolbar" }, yes, no), h("div", { class: "hint" }, "Declining costs nothing. She will ask again later."));
+  return card("The Founders' Shield", ...requestText(s).map((t, i) => quote(t, i === 0)), h("div", { class: "toolbar" }, yes, no), h("div", { class: "hint" }, "Declining costs nothing. She will ask again later."));
 }
 
 function tieBox(t: Tournament, tie: ShieldTie, onReplay?: (id: string) => void): HTMLElement {
@@ -166,7 +165,7 @@ export function endingView(s: SeasonState, kind: "lost" | "defended", done: () =
     h("div", { class: "nt-kicker" }, lost ? "THE END OF YOUR CAREER" : "DOMINION LEAGUE ENDURES"),
     h("h1", {}, lost ? "Pinnacle League takes control" : "Dominion League is saved"),
     scoreboard(s),
-    ...words.map(quote),
+    ...words.map((t) => quote(t)),
     h("div", { class: "grid" },
       h("div", { class: "col" },
         card("Founders' Shield campaign", table(["Season", "Winners", "Runners-up", "Final", "You"], sh.campaign.map((r) => [`Season ${r.season}`, `${r.winnerName}${r.league === "pinnacle" ? " (P)" : ""}`, r.runnerUpName, r.score, reachedText(r.reached)]))),

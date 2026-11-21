@@ -18,7 +18,6 @@ import { buildTeam, evolvePlayers, makeProspects, teamRating, type TeamDef } fro
 import { aiTactic, type NewsItem, type SeasonState } from "./season";
 
 export const MRS_DANIEL = "Mrs. Rakido Kasham Daniel";
-export const OWNER_TITLE = "Owner, Dominion League";
 /** Tournaments a league must win to decide ownership. */
 export const SHIELD_WINS = 5;
 /** Chance of the request on the first, second, third and later eligible postseasons. Hidden from the player. */
