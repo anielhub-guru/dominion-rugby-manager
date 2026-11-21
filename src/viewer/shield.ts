@@ -3,6 +3,7 @@ import { fmtMoney } from "../league/economy";
 import { FACILITIES, FACILITY_IDS, MAX_FACILITY_LEVEL } from "../league/facilities";
 import { teamRating } from "../league/teams";
 import {
+  MRS_DANIEL,
   ROUND_NAMES,
   SHIELD_WINS,
   currentRound,
@@ -20,8 +21,8 @@ import {
 import type { SeasonState } from "../league/season";
 
 const card = (title: string, ...kids: (Node | string)[]) => h("section", { class: "card" }, h("h2", {}, title), ...kids);
-/** Her role is stated once, on the request. Everywhere else she is just "Mrs. Daniel". */
-const quote = (text: string, intro = false) => h("blockquote", { class: "daniel" }, h("div", { class: "who" }, intro ? "Mrs. Daniel, owner" : "Mrs. Daniel"), text);
+/** Her role is stated once, on the request. Everywhere else it is just her full name. */
+const quote = (text: string, intro = false) => h("blockquote", { class: "daniel" }, h("div", { class: "who" }, intro ? `${MRS_DANIEL}, owner` : MRS_DANIEL), text);
 
 function table(head: string[], rows: (string | Node)[][]): HTMLElement {
   const body = h("tbody");
