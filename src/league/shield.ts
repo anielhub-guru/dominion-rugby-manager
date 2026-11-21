@@ -298,6 +298,12 @@ export function shieldSim(state: SeasonState, tie: ShieldTie, live = false): { s
   return { sim, home, away, ...(mineHome ? { managedSide: 0 as const } : mineAway ? { managedSide: 1 as const } : {}) };
 }
 
+/** Who wins a tie's golden-point kick: weighted by team rating, fixed by the seed so a replay shows the same kick. */
+export function goldenWinner(state: SeasonState, tie: ShieldTie): string {
+  const gap = teamRating(clubTeam(state, tie.a)) - teamRating(clubTeam(state, tie.b));
+  return new Rng(hashSeed(state.seed, state.season, tie.id, "golden")).chance(Math.max(0.3, Math.min(0.7, 0.5 + gap * 0.012))) ? tie.a : tie.b;
+}
+
 /** Records a tie's result. A knockout cannot end level: tries decide it, then a golden-point kick weighted by team rating. */
 function settle(state: SeasonState, tie: ShieldTie, log: MatchLog): void {
   let winner: string;
@@ -307,8 +313,7 @@ function settle(state: SeasonState, tie: ShieldTie, log: MatchLog): void {
     winner = log.homeTries > log.awayTries ? tie.a : tie.b;
     decider = "tries";
   } else {
-    const gap = teamRating(clubTeam(state, tie.a)) - teamRating(clubTeam(state, tie.b));
-    winner = new Rng(hashSeed(state.seed, state.season, tie.id, "golden")).chance(Math.max(0.3, Math.min(0.7, 0.5 + gap * 0.012))) ? tie.a : tie.b;
+    winner = goldenWinner(state, tie);
     decider = "golden";
   }
   tie.result = { aScore: log.homeScore, bScore: log.awayScore, aTries: log.homeTries, bTries: log.awayTries, winner, ...(decider ? { decider } : {}) };

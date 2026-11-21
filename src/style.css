@@ -569,3 +569,28 @@ blockquote.daniel .who { font-style: normal; font-size: 10px; letter-spacing: 2p
 .ending.lost h1 { color: #ff9a8a; }
 .ending .card, .col > .card { min-width: 0; overflow-x: auto; }
 .ending table.squad th, .ending table.squad td, .col table.squad.shield-table td { text-align: left; }
+
+/* Golden point: shown over the stage when a Founders' Shield tie is level on points and tries. */
+.gp { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: #0b100eee; cursor: pointer; overflow: hidden; animation: gp-in .35s ease-out both; }
+.gp.out { animation: gp-out .35s ease-in forwards; }
+.gp-glow { position: absolute; inset: -30%; background: radial-gradient(circle at 50% 45%, #e8c14a55, transparent 55%); animation: gp-pulse 1.6s ease-in-out infinite alternate; }
+.gp-title { position: relative; font-size: 34px; font-weight: 800; letter-spacing: .22em; color: #e8c14a; text-shadow: 0 0 18px #e8c14aaa; transform: scale(.4); opacity: 0; }
+.gp.s1 .gp-title { animation: gp-title 0.8s cubic-bezier(.2,1.4,.4,1) forwards; }
+.gp-sub { position: relative; color: var(--dim); font-size: 13px; opacity: 0; }
+.gp.s1 .gp-sub { animation: fadein .6s .6s ease-out forwards; }
+.gp-posts { position: absolute; right: 12%; bottom: 0; height: 70%; opacity: 0; transition: opacity .5s; }
+.gp.s2 .gp-posts, .gp.s3 .gp-posts { opacity: .9; }
+.gp-ball { position: absolute; left: 14%; bottom: 8%; width: 34px; opacity: 0; }
+.gp.s2 .gp-ball { opacity: 1; animation: gp-wait .5s ease-in-out infinite alternate; }
+.gp.s3 .gp-ball { opacity: 1; animation: gp-kick 1.1s cubic-bezier(.3,.6,.5,1) forwards; }
+.gp-result { position: relative; font-size: 26px; font-weight: 800; letter-spacing: .12em; opacity: 0; transform: translateY(10px); }
+.gp.s3 .gp-result { animation: fadein .5s 1s ease-out forwards; }
+.gp.s3 .gp-posts { animation: gp-flash .6s 1s ease-out; }
+@keyframes gp-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes gp-out { to { opacity: 0; } }
+@keyframes gp-pulse { from { opacity: .5; transform: scale(.9); } to { opacity: 1; transform: scale(1.1); } }
+@keyframes gp-title { to { transform: scale(1); opacity: 1; } }
+@keyframes gp-wait { from { transform: translateY(0) rotate(-12deg); } to { transform: translateY(-5px) rotate(-12deg); } }
+@keyframes gp-kick { 0% { transform: translate(0, 0) rotate(-12deg); } 55% { transform: translate(calc(min(60vw, 420px) * .55), -120px) rotate(360deg); } 100% { transform: translate(calc(min(60vw, 420px) * .8), -70px) rotate(720deg) scale(.7); opacity: 0; } }
+@keyframes gp-flash { 0%, 100% { filter: none; } 40% { filter: drop-shadow(0 0 14px #e8c14a); } }
+@media (prefers-reduced-motion: reduce) { .gp-glow, .gp.s2 .gp-ball { animation: none; } .gp.s3 .gp-ball { animation-duration: .01s; } }
