@@ -4,6 +4,19 @@ Versions follow `MAJOR.MINOR.PATCH`. The version lives in `package.json` and is 
 `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock` (a test fails if they
 drift apart). It is shown in the app footer and on the new-game screen.
 
+## 0.13.0
+
+- Sound. Matches now have a Nigerian stadium soundtrack, all synthesised in the app (no audio files). A supporters'
+  section roars and swells as play nears a try line, and a band of shekere shakers, congas, an agogo bell, a dundun and a
+  talking drum plays highlife-style phrases with plastic corneta horns and hand claps. Derbies are louder.
+- Pitch sounds: the referee's whistle (kick-off, penalties, cards, half time, a triple blast at full time), boot on ball,
+  tackles, and the ball ringing off the upright.
+- The crowd reacts to the match from your club's side: a roar, horns, drum roll and chant for your try, groans when the
+  other side scores, a gasp and groan for a kick off the post, cheers for their misses, boos for a red card against you
+  and a hush for an injury. Replays are neutral.
+- Sound controls (a mute button and a volume slider, remembered between matches) sit in the match controls. Sound pauses
+  with the match, drops to a murmur while skipping, and thins out at 4x and 8x so fast play stays clear.
+
 ## 0.12.0
 
 - The Founders' Shield: a long-term ownership storyline (see docs/founders-shield-endgame-design.md). When every

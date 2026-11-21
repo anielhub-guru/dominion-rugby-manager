@@ -10,6 +10,8 @@ import { Cutaways } from "../cutaways";
 import { WeatherLayer } from "./weather";
 import { weatherReport, type Weather } from "../engine/weather";
 import { describeLine, playerOfTheMatch, teamBest } from "../league/awards";
+import { StadiumAudio, soundControls } from "../audio/engine";
+import { cuesFor, tensionAt } from "../audio/cues";
 
 /** Sets an element's text colour and returns it. */
 const tint = <T extends HTMLElement>(el: T, color: string): T => {
@@ -80,6 +82,8 @@ export class LiveMatch {
   /** The managed club is playing its rival. */
   private derby = false;
   private opts: LiveOptions;
+  /** Crowd, band and pitch sounds. */
+  private audio: StadiumAudio;
   private feed = h("div", { class: "feed" });
   private score = h("div", { class: "sb-score" }, "0 - 0");
   private clock = h("div", { class: "sb-clock" }, "00:00");
@@ -130,9 +134,10 @@ export class LiveMatch {
 
   constructor(opts: LiveOptions) {
     this.opts = opts;
+    this.derby = opts.sim ? opts.sim.derby : !!opts.log?.derby;
+    this.audio = new StadiumAudio({ derby: this.derby });
     this.arena = new ArenaView(opts.home.short, opts.away.short, teamColor(opts.home.id), teamColor(opts.away.id, "#f0b35a"));
     this.weather = opts.sim ? opts.sim.weather : opts.log?.weather;
-    this.derby = opts.sim ? opts.sim.derby : !!opts.log?.derby;
     this.fx = new WeatherLayer(this.weather ?? { id: "clear", wind: 0 });
     this.cutaways = new Cutaways({ home: opts.home, away: opts.away, stage: this.stage, arena: this.arena.canvas, rate: () => (this.paused ? 0 : this.speed) });
     if (opts.log) {
@@ -144,6 +149,7 @@ export class LiveMatch {
       this.pauseBtn.textContent = "Pause";
       this.status.textContent = "Replay";
     }
+    this.audio.start();
     this.root = this.build();
     this.ticker = window.setInterval(() => this.tick(), 50);
     this.updateManage();
@@ -154,6 +160,7 @@ export class LiveMatch {
     this.disposed = true;
     this.done = true;
     window.clearInterval(this.ticker);
+    this.audio.dispose();
     this.cutaways.cancel();
     this.goldenResolve?.();
     this.arena.dispose();
@@ -181,6 +188,7 @@ export class LiveMatch {
       const b = h("button", { class: s === this.speed ? "active" : "" }, `${s}x`);
       b.onclick = () => {
         this.speed = s;
+        this.audio.setSpeed(s);
         this.speedBtns.forEach((x) => x.classList.toggle("active", x === b));
       };
       this.speedBtns.push(b);
@@ -191,7 +199,7 @@ export class LiveMatch {
       this.opts.onBack?.();
     };
     this.backBtn.hidden = !this.opts.onBack;
-    const controls = h("div", { class: "controls" }, this.backBtn, this.pauseBtn, h("span", { class: "sp" }, "Speed"), ...this.speedBtns, this.cutaways.controls(), h("span", { class: "spacer" }), this.helpBtn, this.skipBtn);
+    const controls = h("div", { class: "controls" }, this.backBtn, this.pauseBtn, h("span", { class: "sp" }, "Speed"), ...this.speedBtns, this.cutaways.controls(), soundControls(), h("span", { class: "spacer" }), this.helpBtn, this.skipBtn);
 
     const scoreboard = h("div", { class: "scoreboard" },
       tint(h("div", { class: "sb-team home" }, home.name), teamColor(home.id)),
@@ -303,6 +311,7 @@ export class LiveMatch {
 
   private setPaused(p: boolean) {
     this.paused = p;
+    if (this.started || !p) this.audio.setPaused(p);
     if (!p && this.coverBox) {
       this.coverBox.remove();
       this.coverBox = null;
@@ -324,6 +333,7 @@ export class LiveMatch {
   private skip() {
     if (this.done) return;
     this.skipping = true;
+    this.audio.setSkipping(true);
     this.started = true;
     this.clockFrozen = false;
     this.arena.cancel();
@@ -403,6 +413,7 @@ export class LiveMatch {
     if (this.skipping && ev.type === "golden") {
       // Skip to end stops at the golden-point break: the extra time is played, never skipped past unseen.
       this.skipping = false;
+      this.audio.setSkipping(false);
       this.clockSec = secOf(ev);
       this.clock.textContent = fmtClock(this.clockSec);
       this.score.textContent = `${ev.homeScore} - ${ev.awayScore}`;
@@ -429,6 +440,7 @@ export class LiveMatch {
       const before = this.cutaways.playsBefore(ev);
       if (before && !this.skipping && !this.disposed) await this.cutaways.play(ev, false);
       if (this.disposed) return;
+      this.audio.play(cuesFor(ev, "start", this.opts.managedSide));
       await this.arena.play(scene, () => (this.paused ? 0 : this.speed));
       // Now and then the moment gets an illustrated cutaway on top of the arena frame.
       if (!before && !this.skipping && !this.disposed) await this.cutaways.play(ev, true);
@@ -512,6 +524,9 @@ export class LiveMatch {
 
   /** Puts the event's line on the commentary card and updates the scoreboard. */
   private reveal(ev: MatchEvent) {
+    // A moment that was not a highlight has had no build-up yet, so give it one now.
+    if (!ev.highlight) this.audio.play(cuesFor(ev, "start", this.opts.managedSide));
+    this.audio.play(cuesFor(ev, "result", this.opts.managedSide));
     this.score.textContent = `${ev.homeScore} - ${ev.awayScore}`;
     this.setPressure(ev.x1 / 100);
     this.lastShownSec = secOf(ev);
@@ -556,6 +571,7 @@ export class LiveMatch {
   private setPressure(homeShare: number, snap = false) {
     const raw = Math.min(0.97, Math.max(0.03, homeShare));
     this.pressure = snap ? raw : this.pressure * 0.4 + raw * 0.6;
+    this.audio.setTension(tensionAt(this.pressure));
     const pct = `${(this.pressure * 100).toFixed(1)}%`;
     this.pFill.style.width = pct;
     this.pMark.style.left = pct;
@@ -613,6 +629,12 @@ export class LiveMatch {
 
   private finish() {
     this.done = true;
+    // Skipped matches never revealed the final whistle, so blow it now.
+    if (this.skipping) {
+      this.audio.setSkipping(false);
+      this.audio.play(cuesFor({ type: "fulltime", team: undefined, variant: undefined }, "result"));
+    }
+    this.audio.finish();
     this.resumeBar.hidden = true;
     this.pendingSec = Infinity;
     this.arenaOpen = false;

@@ -69,6 +69,7 @@ Win 4, draw 2, plus a bonus point for three or more tries and one for a close lo
 - **Real coaching decisions.** Starting five and positions, four tactics, three defensive shapes, training focus, substitutions and half-time team talks.
 - **Discipline that matters.** Yellow cards send a player to the sin bin and reds mean a suspension. A side playing a man down concedes far more tries.
 - **Injuries and long bans.** Hard tackles can hurt players and keep them out for up to five matches. Dangerous play (a mistimed tackle, a high tackle, a swinging elbow, rarely a spear tackle) earns a straight red and a ban of two to five.
+- **Stadium sound.** A synthesised Nigerian supporters' section (a roaring crowd, a drum-and-shaker band, corneta horns), referee whistles and tackles, with a crowd that reacts to every try, miss and card. No audio files.
 - **Derbies.** Matches against your rival are hotter: form counts for less and tempers run higher, for both sides.
 - **Extra squad places.** Win the league or smash the board's goal and the board funds extra squad depth, up to twelve players.
 - **Careers and the offseason.** Hidden potential, growth, decline and retirement. Sell players, sign youth prospects, buy from the transfer list.
@@ -95,6 +96,7 @@ Want to try it without Rust? `npm run dev` runs the same game in your browser at
 | Path | Role |
 |---|---|
 | `src/engine/` | Match engine (`match.ts`), commentary (`commentary.ts`), seeded RNG, shared types. No DOM, no I/O. |
+| `src/audio/` | Stadium sound: which cues each match event triggers (`cues.ts`) and the Web Audio synthesis (`engine.ts`). |
 | `src/league/` | Teams, schedule, standings, season flow. Pure functions over a serialisable `SeasonState`. |
 | `src/viewer/` | Table, highlight choreography (`scenes.ts`, pure and unit-tested), canvas renderer (`arena.ts`), live match controller (`live.ts`), the in-game rulebook (`rules.ts`), stat helpers. |
 | `src/storage.ts`, `src/main.ts` | Persistence bridge and the app shell. |
