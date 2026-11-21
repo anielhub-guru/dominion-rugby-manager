@@ -3,7 +3,7 @@ import { ATTRS, ROLES } from "../engine/types";
 import type { Attr, Gender, Player, Role, TacticId, Team } from "../engine/types";
 import { makeLook } from "./look";
 
-interface TeamDef {
+export interface TeamDef {
   id: string;
   name: string;
   short: string;
@@ -71,22 +71,25 @@ export const potentialStars = (v: number) => Math.max(1, Math.min(5, Math.round(
  * new game has different squads. The men's and women's leagues share the clubs but not the players.
  */
 export function generateTeams(seed: number, gender: Gender = "men"): Team[] {
-  return TEAM_DEFS.map((def) => {
-    const rng = new Rng(hashSeed(seed, def.id, gender));
-    const firstNames = gender === "women" ? FIRST_WOMEN : FIRST_MEN;
-    const used = new Set<string>();
-    const players: Player[] = SQUAD_ROLES.map((role, i) => {
-      let name: string;
-      do {
-        name = `${rng.pick(firstNames)} ${rng.pick(LAST)}`;
-      } while (used.has(name));
-      used.add(name);
-      const p = buildPlayer(rng, `${def.id}-${i + 1}`, name, role, rng.int(20, 34), def.strength - (i >= 8 ? 8 : i >= 5 ? 5 : 0), gender);
-      p.potential = initialPotential(p, new Rng(hashSeed(seed, p.id, "pot")));
-      return p;
-    });
-    return { id: def.id, gender, name: def.name, short: def.short, style: def.style, players, lineup: players.slice(0, 5).map((p) => p.id), reserves: players.slice(8).map((p) => p.id) };
+  return TEAM_DEFS.map((def) => buildTeam(def, seed, gender));
+}
+
+/** One founding squad for a club definition, deterministic from the seed. Also used for the Pinnacle League clubs. */
+export function buildTeam(def: TeamDef, seed: number, gender: Gender): Team {
+  const rng = new Rng(hashSeed(seed, def.id, gender));
+  const firstNames = gender === "women" ? FIRST_WOMEN : FIRST_MEN;
+  const used = new Set<string>();
+  const players: Player[] = SQUAD_ROLES.map((role, i) => {
+    let name: string;
+    do {
+      name = `${rng.pick(firstNames)} ${rng.pick(LAST)}`;
+    } while (used.has(name));
+    used.add(name);
+    const p = buildPlayer(rng, `${def.id}-${i + 1}`, name, role, rng.int(20, 34), def.strength - (i >= 8 ? 8 : i >= 5 ? 5 : 0), gender);
+    p.potential = initialPotential(p, new Rng(hashSeed(seed, p.id, "pot")));
+    return p;
   });
+  return { id: def.id, gender, name: def.name, short: def.short, style: def.style, players, lineup: players.slice(0, 5).map((p) => p.id), reserves: players.slice(8).map((p) => p.id) };
 }
 
 /** Chance a player retires at the end of the season in which they reach this age. */
@@ -155,9 +158,8 @@ export function makeReserves(team: Team, seed: number): Player[] {
 }
 
 /** Young prospects for a vacancy. Their true potential is hidden behind a noisy `scouted` value. */
-export function makeProspects(team: Team, slotKey: string, role: Role, seed: number, count = 3, bonus = 0): Player[] {
-  const def = TEAM_DEFS.find((d) => d.id === team.id);
-  const strength = def?.strength ?? 62;
+export function makeProspects(team: Team, slotKey: string, role: Role, seed: number, count = 3, bonus = 0, clubStrength?: number): Player[] {
+  const strength = clubStrength ?? TEAM_DEFS.find((d) => d.id === team.id)?.strength ?? 62;
   const firstNames = team.gender === "women" ? FIRST_WOMEN : FIRST_MEN;
   const taken = new Set(team.players.map((p) => p.name));
   return Array.from({ length: count }, (_, k) => {

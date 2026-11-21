@@ -543,3 +543,29 @@ dialog.story .story-art img { max-width: 100%; max-height: 220px; object-fit: co
 .career-tab.over.active { background: #17241d; color: #8aa593; border-style: solid; }
 .career-tabs + .career { margin-top: 0; border-top: none; }
 .career.over .career-head h3 { color: #8aa593; }
+
+/* Founders' Shield */
+blockquote.daniel { margin: 8px 0; padding: 6px 12px; border-left: 3px solid #e8c14a; color: #f3e6b3; font-style: italic; }
+blockquote.daniel .who { font-style: normal; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #e8c14a; }
+.shield-score { display: flex; align-items: center; justify-content: center; gap: 22px; padding: 8px 0; }
+.shield-score .big { font-size: 28px; font-weight: bold; letter-spacing: 2px; }
+.shield-score .lg { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.shield-score .dom b { color: var(--acc); } .shield-score .pin b { color: var(--away); }
+.pips { display: flex; gap: 4px; }
+.pips i { width: 10px; height: 10px; border: 1px solid var(--line); border-radius: 50%; }
+.shield-score .dom .pips i.on { background: var(--acc); border-color: var(--acc); }
+.shield-score .pin .pips i.on { background: var(--away); border-color: var(--away); }
+.bracket { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.bracket .rname { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--dim); margin-bottom: 4px; }
+.bracket .tie { border: 1px solid var(--line); padding: 4px 6px; margin-bottom: 6px; font-size: 11px; }
+.bracket .side { display: flex; justify-content: space-between; gap: 6px; color: var(--dim); }
+.bracket .side.dominion span { color: #9fd9ae; } .bracket .side.pinnacle span { color: #e8c27a; }
+.bracket .side.win span, .bracket .side.win b { color: #fff; font-weight: bold; }
+.bracket .side.you span { text-decoration: underline; }
+.bracket .tie button { font-size: 10px; padding: 1px 6px; margin-top: 2px; }
+@media (max-width: 900px) { .bracket { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ending { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; padding: 12px 0 30px; }
+.ending h1 { margin: 0; font-size: 26px; color: #fff; }
+.ending.lost h1 { color: #ff9a8a; }
+.ending .card, .col > .card { min-width: 0; overflow-x: auto; }
+.ending table.squad th, .ending table.squad td, .col table.squad.shield-table td { text-align: left; }

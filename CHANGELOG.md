@@ -4,6 +4,20 @@ Versions follow `MAJOR.MINOR.PATCH`. The version lives in `package.json` and is 
 `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock` (a test fails if they
 drift apart). It is shown in the app footer and on the new-game screen.
 
+## 0.12.0
+
+- The Founders' Shield: a long-term ownership storyline (see docs/founders-shield-endgame-design.md). When every
+  facility at your club is level 3, Mrs. Rakido Kasham Daniel may ask you, after the last matchday, to defend Dominion
+  League against Pinnacle League. The chance rises with each eligible postseason (hidden from you) and is certain from
+  the fourth. Declining costs nothing and she asks again later.
+- Once accepted, a ten-club knockout is played every postseason: you, four Dominion clubs by league position and five
+  persistent Pinnacle clubs. Two preliminary ties, then quarter-finals (you are always seeded in), semi-finals and the
+  final. Level matches are settled on tries, then a golden-point kick. Shield matches use rested squads and do not touch
+  the league table, stats, injuries or money. Watch your own ties live or quick-sim them; the rest use the match engine.
+- Each Shield scores a point for the winner's league, first to five. Five for Dominion ends the threat and the career goes
+  on; five for Pinnacle ends the career, with a campaign history and legacy report and the option to begin a new career.
+- New Shield tab with the campaign score, history, Pinnacle clubs and your own record. Saves migrate to version 11.
+
 ## 0.11.2
 
 - Followed careers sharing a club now get live context in the History tab. It distinguishes players competing for

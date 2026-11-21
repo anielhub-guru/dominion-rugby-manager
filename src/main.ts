@@ -59,9 +59,11 @@ import { buildTable } from "./viewer/table";
 import { championsCard, clubCard, followedCard } from "./viewer/history";
 import { showStory, storyOpen } from "./viewer/story";
 import { reviewSeason } from "./league/review";
+import { acceptShield, declineShield, dismissVictory, managedTie, playShieldRound, shieldBlocksSeason, shieldEnding, shieldPending, shieldSim } from "./league/shield";
+import { endingView, requestCard, shieldView, tournamentCard, type ShieldActions } from "./viewer/shield";
 import { adviseRecruitment, type Part } from "./league/recruit";
 
-type Tab = "overview" | "squad" | "training" | "projects" | "deals" | "table" | "fixtures" | "history";
+type Tab = "overview" | "squad" | "training" | "projects" | "deals" | "table" | "fixtures" | "history" | "shield";
 const TABS: [Tab, string][] = [
   ["overview", "1 Overview"],
   ["squad", "2 Squad"],
@@ -71,7 +73,10 @@ const TABS: [Tab, string][] = [
   ["table", "6 Table"],
   ["fixtures", "7 Fixtures"],
   ["history", "8 History"],
+  ["shield", "9 Shield"],
 ];
+/** The Shield tab appears once Mrs. Daniel has asked, and stays as the record of the campaign. */
+const tabVisible = (s: SeasonState, id: Tab) => id !== "shield" || (!!s.shield && s.shield.status !== "dormant") || !!s.shield?.campaign.length;
 
 let state: SeasonState | null = null;
 let tab: Tab = "overview";
@@ -167,9 +172,61 @@ const quickSim = () => {
   });
 };
 
-const nextSeason = () => {
+/** Mrs. Daniel's request, and the Founders' Shield rounds played after the season ends. */
+const answerShield = (accept: boolean) => {
   const s = state;
   if (!s) return;
+  return guarded(async () => {
+    await persist(accept ? acceptShield(s) : declineShield(s));
+    if (accept) tab = "overview";
+  });
+};
+
+const playShield = () => {
+  const s = state;
+  if (!s || !shieldPending(s)) return;
+  return guarded(async () => {
+    const r = playShieldRound(s);
+    await persist(r.state, r.logs);
+  });
+};
+
+/** Watch your Founders' Shield tie live, like a league match. */
+function watchShield() {
+  const s = state;
+  const tie = s && managedTie(s);
+  if (!s || !tie) return;
+  const { sim, home, away, managedSide } = shieldSim(s, tie, true);
+  if (managedSide === undefined) return;
+  live = new LiveMatch({
+    onHelp: showRules,
+    home,
+    away,
+    sim,
+    managedSide,
+    onBack: () => {
+      live?.dispose();
+      live = null;
+      render();
+    },
+    onExit: (log) => {
+      live?.dispose();
+      live = null;
+      void guarded(async () => {
+        const r = playShieldRound(s, log);
+        r.state.tactic = managedSide === 0 ? log.homeTactic : log.awayTactic;
+        await persist(r.state, r.logs);
+      });
+    },
+  });
+  render();
+}
+
+const shieldActions = (): ShieldActions => ({ watch: watchShield, play: () => void playShield(), replay: replayMatch, busy });
+
+const nextSeason = () => {
+  const s = state;
+  if (!s || shieldBlocksSeason(s)) return;
   return guarded(async () => {
     await persist(startNextSeason(s));
     tab = "overview";
@@ -870,9 +927,12 @@ function overviewView(s: SeasonState): HTMLElement {
     left.append(offersCard(s));
   } else if (isSeasonOver(s)) {
     const champ = teamById(s, table[0].teamId);
-    const next = h("button", { class: "primary" }, "Start next season");
+    const blocked = shieldBlocksSeason(s);
+    const next = h("button", { class: "primary", disabled: blocked }, "Start next season");
     next.onclick = () => void nextSeason();
-    left.append(card(`Season ${s.season} complete`, h("p", {}, `Champions: ${champ.name}`), h("p", {}, `Your finish: ${ordinal(pos)} of ${table.length}`), next));
+    left.append(card(`Season ${s.season} complete`, h("p", {}, `Champions: ${champ.name}`), h("p", {}, `Your finish: ${ordinal(pos)} of ${table.length}`), next, ...(blocked ? [h("div", { class: "hint" }, s.shield?.status === "requested" ? "Answer Mrs. Daniel before the next season." : "Play out the Founders' Shield first.")] : [])));
+    if (s.shield?.status === "requested") left.append(requestCard(() => void answerShield(true), () => void answerShield(false)));
+    else if (s.shield?.tournament?.season === s.season && s.shield.status !== "dormant") left.append(tournamentCard(s, shieldActions()));
   } else {
     const f = managedFixture(s)!;
     const home = f.homeId === s.managedId;
@@ -1308,8 +1368,15 @@ function render() {
     return;
   }
   const s = state;
+  // The closing scenes take over the whole screen: the loss ends the career, the win is shown once.
+  const ending = shieldEnding(s);
+  if (ending) {
+    app.append(h("main", {}, endingView(s, ending, () => (ending === "lost" ? newGameFlow() : void guarded(async () => void (await persist(dismissVictory(s))))))));
+    return;
+  }
+  if (!tabVisible(s, tab)) tab = "overview";
   const nav = h("nav");
-  for (const [id, label] of TABS) {
+  for (const [id, label] of TABS.filter(([t]) => tabVisible(s, t))) {
     const [num, ...name] = label.split(" ");
     const waiting = id === "deals" ? (s.deals ?? []).filter((d) => d.status === "offered").length + (fanOffer(s) ? 1 : 0) : 0;
     const b = h("button", { class: id === tab ? "active" : "" }, name.join(" "), ...(waiting ? [h("span", { class: "dot", title: `${waiting} deal offer${waiting === 1 ? "" : "s"} waiting` })] : []), h("kbd", {}, num));
@@ -1346,6 +1413,7 @@ function render() {
   else if (tab === "projects") body.append(projectsView(s));
   else if (tab === "deals") body.append(dealsView(s));
   else if (tab === "table") body.append(card("League table", buildTable(s, { onClub: (id) => (id === s.managedId ? undefined : scout(s, id)) }), h("div", { class: "hint" }, "▲▼ = places moved since the previous matchday. Win 4, draw 2, +1 for 3+ tries (TF), +1 for losing by 7 or fewer (BP). Click a club to scout it.")));
+  else if (tab === "shield") body.append(shieldView(s, shieldActions()));
   else if (tab === "history") body.append(h("div", { class: "col" }, championsCard(s), followedCard(s, historyCareer, (id) => { historyCareer = id; render(); }), clubCard(s, historyClub && s.records[historyClub] ? historyClub : s.managedId, (id) => { historyClub = id; render(); })));
   else body.append(fixturesView(s));
   app.append(body);
@@ -1380,11 +1448,12 @@ document.addEventListener("keydown", (e) => {
   if (!state) return;
   if (e.key === " " || e.key === "Enter") {
     e.preventDefault();
-    void (isSeasonOver(state) ? nextSeason() : quickSim());
+    if (shieldEnding(state)) return;
+    void (isSeasonOver(state) ? (shieldPending(state) ? playShield() : nextSeason()) : quickSim());
     return;
   }
   const idx = Number(e.key) - 1;
-  if (idx >= 0 && idx < TABS.length) {
+  if (idx >= 0 && idx < TABS.length && tabVisible(state, TABS[idx][0])) {
     tab = TABS[idx][0];
     selectedPlayer = null;
     render();

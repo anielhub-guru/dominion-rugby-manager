@@ -13,11 +13,12 @@ import { MAX_SPONSOR_DEALS, SPONSOR_LAPSE_MATCHDAY, describeCondition, fanOffer,
 import { FACILITIES, FACILITY_IDS, MAX_FACILITY_LEVEL, OFFER_FORMS, PROPOSAL_CHANCE, PROPOSAL_LAPSE_MATCHDAY, SPONSORS, academyBonus, geniusChance, levelOf, projectDuration, recoveryBonus, reducedInjury, trainingSlots, upgradeCost, type FacilityId, type FacilityLevels } from "./facilities";
 import { recordMatches, recordVs, rememberMates } from "./moments";
 import { ERA_WINDOW, closeEraLedger, eraDue, returnEntry, raceCandidate, isLive, joinedElsewhereNews, introNews, makeEraProspect, newEraProspect, noContractNews, recordEraSeason, retirementNews, returns, type EraProspect } from "./era";
+import { shieldBlocksSeason, shieldPostseason, type ShieldState } from "./shield";
 import { RESERVE_COUNT, makeGenius, evolvePlayers, playShare, generateTeams, makeReserves, initialPotential, makeProspects, objectiveTarget, overall, teamRating } from "./teams";
 
 export { describeLine, impact };
 
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 11;
 /** Five starters, three bench, two reserves. */
 export const SQUAD_SIZE = 10;
 /** Extra squad places a club can earn (see economy.ts earnsSquadSlot). They are depth: extra reserves, outside the matchday eight. */
@@ -141,6 +142,8 @@ export interface SeasonState {
   declinedTop?: number;
   /** Each club's records, by club id. Start from generated founding records and are broken as you play. */
   records: LeagueRecords;
+  /** The Founders' Shield ownership campaign. Missing until the facilities are complete and Mrs. Daniel first asks. */
+  shield?: ShieldState;
   /** Marked prospects and the careers they have had since (see era.ts). Missing on older saves. */
   eraProspects?: EraProspect[];
   /** The season whose intake last marked a prospect. */
@@ -211,6 +214,8 @@ export function migrateSave(raw: SeasonState): SeasonState | null {
   if (s.version === 7) s = { ...s, version: 8 };
   if (s.version === 8) s = { ...s, version: 9, records: defaultLeagueRecords(s.seed, s.gender), legends: {} };
   if (s.version === 9) s = { ...s, version: 10, startYear: DEFAULT_START_YEAR };
+  // Version 11 adds the optional Founders' Shield campaign (see shield.ts); older saves simply have none yet.
+  if (s.version === 10) s = { ...s, version: 11 };
   if (s.version !== SAVE_VERSION) return null;
   return { ...s, shape: s.shape ?? "sweeper" };
 }
@@ -285,7 +290,7 @@ export function passFanChallenge(prev: SeasonState): SeasonState {
 export const isSeasonOver = (s: SeasonState) => s.matchday > s.totalMatchdays;
 
 export function teamById(s: SeasonState, id: string): Team {
-  const t = s.teams.find((x) => x.id === id);
+  const t = s.teams.find((x) => x.id === id) ?? s.shield?.pinnacle.find((c) => c.team.id === id)?.team;
   if (!t) throw new Error(`Unknown team ${id}`);
   return t;
 }
@@ -434,6 +439,7 @@ export function buildSim(s: SeasonState, f: Fixture, live = false): MatchSim {
  */
 export function playMatchday(prev: SeasonState, managedLog?: MatchLog): { state: SeasonState; logs: MatchLog[] } {
   if (isSeasonOver(prev)) throw new Error("Season is over");
+  if (prev.shield?.status === "lost") throw new Error("Your career is over");
   if (prev.intake) throw new Error("Choose your new signings before playing");
   const state = structuredClone(prev);
   const ids = state.teams.map((t) => t.id);
@@ -494,6 +500,8 @@ export function playMatchday(prev: SeasonState, managedLog?: MatchLog): { state:
   if (md === state.totalMatchdays) items.unshift(finalPositionNews(state, ids, md));
   const built = tickProject(state, md);
   if (built) items.unshift(built);
+  // The postseason: Mrs. Daniel's request, or this year's Founders' Shield draw.
+  if (md === state.totalMatchdays) items.unshift(...shieldPostseason(state));
   items.unshift(...settleDeals(state, md, mine));
   if (state.proposal && md >= PROPOSAL_LAPSE_MATCHDAY) {
     delete state.proposal;
@@ -774,6 +782,7 @@ export function seasonRecordFor(state: SeasonState): SeasonRecord {
 
 export function startNextSeason(prev: SeasonState): SeasonState {
   if (!isSeasonOver(prev)) throw new Error("Season is not over");
+  if (shieldBlocksSeason(prev)) throw new Error("Settle the Founders' Shield before the next season");
   const state = structuredClone(prev);
   const ids = state.teams.map((t) => t.id);
   const table = standingsAt(ids, state.fixtures, state.totalMatchdays);
