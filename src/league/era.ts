@@ -1,5 +1,5 @@
 import { hashSeed, Rng } from "../engine/rng";
-import { ROLES, type Player, type Role, type Team } from "../engine/types";
+import { ROLES, type Gender, type Player, type Role, type Team } from "../engine/types";
 import { makeProspects, overall } from "./teams";
 import { STORY_KEYS, closeLedger, pruneVs, vsCandidates, type Candidate, type Ledger, type VsRecord } from "./moments";
 import { SHORT, storyText, type WordKey } from "./wording";
